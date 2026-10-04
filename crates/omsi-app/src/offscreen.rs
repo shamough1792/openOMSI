@@ -100,7 +100,13 @@ pub(crate) fn run_offscreen(
                 if let Some(k) = args.duty_trip {
                     d.start_at(k, args.duty_first_stop);
                 }
-                d.update(&mut p.vehicle, parse_time(&args.time));
+                if args.is_resuming() {
+                    d.resume(&mut p.vehicle, parse_time(&args.time), args.situation_next_stop);
+                    // (as in the window: see `App`)
+                    p.duty_typed = args.autostart;
+                } else {
+                    d.update(&mut p.vehicle, parse_time(&args.time));
+                }
                 let mut fonts = world.fonts.lock();
                 if let Err(e) = crate::schedule_paper::update_vehicle(
                     &mut p.vehicle,
@@ -266,7 +272,7 @@ pub(crate) fn run_offscreen(
         .and_then(|v| v.parse().ok())
         .unwrap_or(0.0);
     let mut last_reasons: Vec<String> = Vec::new();
-    if args.autostart {
+    if args.autostart && !args.is_resuming() {
         if let Some(p) = player.as_mut() {
             log::info!("{}", p.start_up());
             if let Some(d) = duty.as_ref() {
@@ -363,6 +369,10 @@ pub(crate) fn run_offscreen(
         if let Some(l) = lan_off.as_mut() {
             l.clock_speed = *speed;
         }
+    }
+    let mut ground_gap = crate::ground_gap::GroundGap::from_env();
+    if let Some(t) = traffic.as_ref() {
+        crate::ground_gap::check_lanes(&world, t);
     }
     for i in 0..total_frames {
         let t_s = i as f32 * dt;
@@ -499,6 +509,7 @@ pub(crate) fn run_offscreen(
                 t,
                 Some(&view_cam),
                 w as f64 / h.max(1) as f64,
+                triple_extent(&settings, &view_cam, w, h),
                 weather.fog.0 as f64,
                 &run_clock,
                 humans_off.as_ref(),
@@ -584,6 +595,7 @@ pub(crate) fn run_offscreen(
             t.others = lan_outlines(&remotes_off);
             t.others.extend(own_outlines(player.as_ref(), &[]));
             t.player_priority = player.as_ref().and_then(|p| p.vehicle.var("TrafficPriority")).is_some_and(|v| v > 0.5);
+            t.player_blinker = player.as_ref().map(|p| lan::indicator(&p.vehicle)).unwrap_or(0);
             t.tick(dt, player.as_ref().map(|p| player_outline(p)));
             world.set_switches(&t.switch_requests());
             world.set_signals(&t.signal_aspects(&world.signal_routes, None));
@@ -633,7 +645,14 @@ pub(crate) fn run_offscreen(
                         // (a gate of a manual gearbox comes with the automatic clutch, as
                         // from the keys)
                         player.clutch_for_gate(name);
-                        player.vehicle.trigger(name);
+                        // (the game's door actions, `door_<n>` / `doors_all`, as a button
+                        // pressed and let go)
+                        if crate::player::door_action(name).is_some() {
+                            player.action(name, true);
+                            player.action(name, false);
+                        } else {
+                            player.vehicle.trigger(name);
+                        }
                     }
                 }
                 player.axes.clutch = (player.axes.clutch - 0.7 * dt).max(0.0);
@@ -746,6 +765,7 @@ pub(crate) fn run_offscreen(
                         controls.brake = ((speed - kmh - 3.0) / 10.0).clamp(0.0, 1.0);
                     }
                 }
+                player.tick_auto_shift(dt, controls.throttle, controls.brake);
                 player.auto_clutch_bite(controls.throttle);
                 controls.clutch = controls.clutch.max(player.axes.clutch);
                 player.vehicle.set_controls(controls);
@@ -887,6 +907,10 @@ pub(crate) fn run_offscreen(
                 }
             }
         }
+        if let Some(g) = ground_gap.as_mut() {
+            g.frame(&world, t_s, player.as_ref().map(|p| &p.vehicle), traffic.as_ref());
+        }
+        let size = (w, h);
         if let Some(h) = humans_off.as_mut() {
             // keep density and time_of_day up to date every tick, as app_events.rs does
             // (stop_target = enter_mean * density; without this it stays at the startup
@@ -934,7 +958,7 @@ pub(crate) fn run_offscreen(
                     far: camera.far,
                 },
             };
-            h.eye = Some(humans::Eye::of(&eye_cam, view_aspect));
+            h.eye = Some(humans::Eye::of(&eye_cam, view_aspect).widened(triple_extent(&settings, &eye_cam, size.0, size.1)));
             h.set_remote_buses(remotes_off.remotes.iter().map(|(id, r)| (*id, r.vehicle())));
             let took = h.tick(
                 dt,
@@ -962,8 +986,8 @@ pub(crate) fn run_offscreen(
             if let Some(t) = traffic.as_mut() {
                 let (alighting, waiting) = h.stop_wishes();
                 t.set_stop_wishes(alighting, waiting);
-                for (id, secs) in h.take_holds() {
-                    t.hold_boarding(id, secs);
+                for (id, stop, secs) in h.take_holds() {
+                    t.hold_boarding(id, stop, secs);
                 }
                 for (id, entry, exit) in h.take_ai_requests() {
                     t.set_pax_requests(id, &entry, &exit);
@@ -1202,6 +1226,9 @@ pub(crate) fn run_offscreen(
             }
             None => log::warn!("--follow: car {id} not found"),
         }
+    }
+    if let Some(g) = ground_gap.take() {
+        g.report();
     }
     if let Some(t) = traffic.as_mut() {
         t.sync(&world, &renderer, &mut scene);
@@ -2273,6 +2300,31 @@ pub(crate) fn run_offscreen(
             }
         }
     }
+    // OMSI_PROBE_GRID=x,y,half,step: the wheels' ground on a square grid around (x, y), as
+    // rows of centimetres relative to the middle ('.' where it is the same, '#' where the
+    // ground there is more than 5 cm lower: a gap in the road the wheels fall through)
+    if let Ok(spec) = omsi_cfg::env::var("OMSI_PROBE_GRID") {
+        let v: Vec<f64> = spec.split(',').filter_map(|t| t.trim().parse().ok()).collect();
+        if v.len() >= 4 {
+            let (cx, cy, half, step) = (v[0], v[1], v[2], v[3].max(0.001));
+            let mid = scene::drive_probe(&world.terrains, &world.surfaces, cx, cy, 1e6).below.unwrap_or(0.0);
+            let n = (half / step).round() as i64;
+            for j in (-n..=n).rev() {
+                let row: String = (-n..=n)
+                    .map(|i| {
+                        let (x, y) = (cx + i as f64 * step, cy + j as f64 * step);
+                        match scene::drive_probe(&world.terrains, &world.surfaces, x, y, mid + 1.0).below {
+                            Some(z) if z < mid - 0.05 => '#',
+                            Some(z) if (z - mid).abs() <= 0.02 => '.',
+                            Some(_) => '+',
+                            None => ' ',
+                        }
+                    })
+                    .collect();
+                log::info!("grid {:.3}: {row}", cy + j as f64 * step);
+            }
+        }
+    }
     // OMSI_PROBE=x0,y0,x1,y1[,n]: print the terrain height and the road surface height
     // along a line, to see where the ground comes through a road
     if let Ok(spec) = omsi_cfg::env::var("OMSI_PROBE") {
@@ -2377,7 +2429,7 @@ pub(crate) fn run_offscreen(
             traffic
                 .as_ref()
                 .map(|t| t.light_vars(c, li))
-                .unwrap_or((-1.0, 0.0))
+                .unwrap_or((omsi_sim::traffic::UNLINKED_PHASE as f32, 0.0))
         };
         let dt = 1.0 / 30.0;
         let mut n = 0;
@@ -2530,7 +2582,10 @@ pub(crate) fn run_offscreen(
         if let Some(l) = lan_off.as_ref() {
             lines.extend(lan::hud_lines(l, &remotes_off, Some(p)));
         }
+        let viewport = settings.hud_viewport((w, h));
+        let overlay_start = scene.overlays.len();
         hud.update(&renderer, &mut scene, &lines);
+        crate::ui::shift_overlays(&mut scene, overlay_start, viewport[0]);
         // the navigator, as the window shows it (its camera settled first)
         if settings.navigator {
             let mut nav = navigator::Navigator::new(true, settings.ui_opacity, &settings.navigator_corner);
@@ -2566,16 +2621,16 @@ pub(crate) fn run_offscreen(
                 time: clock.time,
                 weekday: clock.weekday(),
                 language: &settings.language,
-                screen: (w as f32, h as f32),
+                screen: (viewport[2], viewport[3]),
                 ui_scale: settings.ui_scale,
                 follow_window: settings.ui_scale_window,
                 dt: 0.1,
             };
             for _ in 0..30 {
-                nav.frame(&renderer, &mut scene, &frame);
+                nav.frame_at(&renderer, &mut scene, &frame, viewport[0]);
                 scene.overlays.pop();
             }
-            nav.frame(&renderer, &mut scene, &frame);
+            nav.frame_at(&renderer, &mut scene, &frame, viewport[0]);
         }
     }
     // OMSI_ROAD_PHOTO: photograph the road network from above, point by point, and say
@@ -2729,10 +2784,7 @@ pub(crate) fn run_offscreen(
             renderer.render(&mut scene, &view, w, h, &camera, &lighting);
             let drawn = t.elapsed().as_secs_f64();
             let t = Instant::now();
-            let _ = renderer.device.poll(wgpu::PollType::Wait {
-                submission_index: None,
-                timeout: None,
-            });
+            let _ = omsi_render::wait_gpu(&renderer.device, None);
             cpu.push(drawn * 1000.0);
             gpu.push(t.elapsed().as_secs_f64() * 1000.0);
             if omsi_cfg::env::var_os("OMSI_BENCH_FRAMES").is_some() {
@@ -2796,7 +2848,28 @@ pub(crate) fn run_offscreen(
     if let Some(p) = player_ref.as_ref() {
         render_mirrors(&mut renderer, &mut scene, &world, p, &lighting, None, None);
     }
-    let pixels = renderer.render_to_image(&mut scene, w, h, &camera, &lighting)?;
+    if let Some(p) = player_ref.as_ref() {
+        let mode = omsi_cfg::env::var("OMSI_MIRROR_HUD").ok().and_then(|v| v.parse::<u8>().ok()).unwrap_or(settings.mirror_hud);
+        let mut panels = crate::mirror_hud::MirrorHud::default();
+        panels.set_aspects(world.mirror_aspect.lock().clone());
+        panels.sync(p, mode);
+        if mode != 0 {
+            panels.enabled = true;
+            if panels.panels.is_empty() {
+                panels.toggle_edit(p);
+                panels.toggle_edit(p);
+            }
+        }
+        let viewport = settings.hud_viewport((w, h));
+        let start = scene.overlays.len();
+        panels.push(&mut scene, &world, viewport[2], viewport[3], (0.0, 0.0));
+        crate::ui::shift_overlays(&mut scene, start, viewport[0]);
+    }
+    let pixels = if settings.triple.enabled && !settings.vr_requested() {
+        renderer.render_triple_to_image(&mut scene, w, h, &camera, &lighting, &settings.triple)?
+    } else {
+        renderer.render_to_image(&mut scene, w, h, &camera, &lighting)?
+    };
     log::info!(
         "rendered {} instances in {:.1} ms; GPU memory: textures {:.0} MB, meshes {:.0} MB ({} meshes, {} textures)",
         scene.instances.len(),
@@ -2837,6 +2910,14 @@ static DRIVE_EXTREMES: parking_lot::Mutex<(f32, f32, f64, f64, (DVec3, f32))> = 
 /// `OMSI_CAM_VEHICLE=x,y,z,yaw,pitch[,fov]`: a camera in the bus's own frame (x right,
 /// y forward, z up; yaw relative to the bus) for close-ups of displays and switches - the
 /// final picture and every `--snapshots` one.
+/// With a triple screen, the frustum around its three panels (see `App::sight_extent`).
+fn triple_extent(settings: &crate::settings::Settings, cam: &Camera, w: u32, h: u32) -> Option<(f64, f64)> {
+    (settings.triple.enabled && !settings.vr_requested()).then(|| {
+        let (x, y) = settings.triple.view_extent(cam, w, h);
+        (x as f64, y as f64)
+    })
+}
+
 fn vehicle_camera(player: &Player, camera: &mut Camera) {
     let Ok(spec) = omsi_cfg::env::var("OMSI_CAM_VEHICLE") else { return };
     let v: Vec<f32> = spec

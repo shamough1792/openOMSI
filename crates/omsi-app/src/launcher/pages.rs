@@ -75,6 +75,13 @@ impl PadsView {
             }
         }
     }
+
+    /// Give every controller handle up before handing the hardware to the game. The normal
+    /// controller list uses non-exclusive DirectInput too, not only the force-feedback test.
+    pub(super) fn release_io(&mut self) {
+        self.cancel_feedback_test();
+        self.io = None;
+    }
 }
 
 fn release_feedback(io: &mut Option<crate::controllers::Devices>, active: &mut bool) {
@@ -251,6 +258,9 @@ fn chrono_like(t: u64) -> String {
 fn get<'a>(v: &'a Value, k: &str) -> &'a Value {
     v.get(k).unwrap_or(&Value::Null)
 }
+
+/// The window sizes the settings offer (`resolution`).
+pub(crate) const RESOLUTIONS: &[(&str, &str)] = &[("auto", "Automatic"), ("1280x720", "1280 x 720"), ("1280x800", "1280 x 800 (Steam Deck)"), ("1366x768", "1366 x 768"), ("1600x900", "1600 x 900"), ("1920x1080", "1920 x 1080"), ("1920x1200", "1920 x 1200"), ("2560x1440", "2560 x 1440"), ("3840x2160", "3840 x 2160")];
 
 fn sel_setting(ui: &mut Ui, s: &mut Value, dirty: &mut f32, name: &str, r: Rect, label: &str, key: &str, options: &[(&str, &str)]) {
     ui.label(Rect::new(r.x, r.y, r.w * 0.45, r.h), label);
@@ -508,10 +518,10 @@ fn graphics_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, cols: [Rect; 2]) ->
     // option_presets/*.oop are named after the PCs of their day - "PC 2006", "X10 high",
     // "Chicago Recommended" - which read as random words here.)
     let presets: [(&str, serde_json::Value); 4] = [
-        ("Low", json!({"msaa": 1, "anisotropy": 2, "shadow_size": 1024, "ssao": false, "shadows": false, "detail_textures": false, "clouds": false, "view_distance": "600", "min_obj_size": 0.03, "max_obj_dist": "500", "mirror_size": 128, "render_scale": "0.75", "texture_memory": 800})),
-        ("Medium", json!({"msaa": 2, "anisotropy": 4, "shadow_size": 2048, "ssao": false, "shadows": true, "detail_textures": true, "clouds": true, "view_distance": "900", "min_obj_size": 0.02, "max_obj_dist": "750", "mirror_size": 256, "render_scale": "auto", "texture_memory": 1200})),
-        ("High", json!({"msaa": 4, "anisotropy": 8, "shadow_size": 2048, "ssao": true, "shadows": true, "detail_textures": true, "clouds": true, "view_distance": "auto", "min_obj_size": 0.013, "max_obj_dist": "auto", "mirror_size": 256, "render_scale": "auto", "texture_memory": 0})),
-        ("Ultra", json!({"msaa": 4, "anisotropy": 8, "shadow_size": 4096, "ssao": true, "shadows": true, "detail_textures": true, "clouds": true, "view_distance": "2000", "min_obj_size": 0.005, "max_obj_dist": "1500", "mirror_size": 512, "render_scale": "auto", "texture_memory": 0})),
+        ("Low", json!({"msaa": 1, "anisotropy": 2, "shadow_size": 1024, "ssao": false, "shadows": false, "detail_textures": false, "clouds": false, "view_distance": "600", "min_obj_size": 0.03, "max_obj_dist": "500", "mirror_size": 128, "mirror_refresh": "eco", "render_scale": "0.75", "texture_memory": 800})),
+        ("Medium", json!({"msaa": 2, "anisotropy": 4, "shadow_size": 2048, "ssao": false, "shadows": true, "detail_textures": true, "clouds": true, "view_distance": "900", "min_obj_size": 0.02, "max_obj_dist": "750", "mirror_size": 256, "mirror_refresh": "eco", "render_scale": "auto", "texture_memory": 1200})),
+        ("High", json!({"msaa": 4, "anisotropy": 8, "shadow_size": 2048, "ssao": true, "shadows": true, "detail_textures": true, "clouds": true, "view_distance": "auto", "min_obj_size": 0.013, "max_obj_dist": "auto", "mirror_size": 256, "mirror_refresh": "full", "render_scale": "auto", "texture_memory": 0})),
+        ("Ultra", json!({"msaa": 4, "anisotropy": 8, "shadow_size": 4096, "ssao": true, "shadows": true, "detail_textures": true, "clouds": true, "view_distance": "2000", "min_obj_size": 0.005, "max_obj_dist": "1500", "mirror_size": 512, "mirror_refresh": "full", "render_scale": "auto", "texture_memory": 0})),
     ];
     {
         // the preset the settings match now, else "Custom"
@@ -568,6 +578,9 @@ fn graphics_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, cols: [Rect; 2]) ->
     let left = c.used();
     let mut c = Col::new(ui, cols[1], "Display");
     toggle_setting(ui, s, dirty, c.row(), "Fullscreen", "fullscreen");
+    // (the window's own size in pixels; a Steam Deck's Gaming Mode and other odd screens,
+    // #904 - "Automatic" fits the screen, and fills it under gamescope)
+    sel_setting(ui, s, dirty, "s-res", c.row(), "Window size", "resolution", RESOLUTIONS);
     toggle_setting(ui, s, dirty, c.row(), "V-sync", "vsync");
     sel_setting(ui, s, dirty, "s-fps", c.row(), "Frame limit", "max_fps", &[("0", "Screen refresh rate"), ("30", "30 fps"), ("45", "45 fps"), ("60", "60 fps"), ("120", "120 fps"), ("144", "144 fps"), ("1000", "Unlimited")]);
     // (a Mac has Metal only; elsewhere a driver's Vulkan that misbehaves, or a card without
@@ -582,6 +595,7 @@ fn graphics_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, cols: [Rect; 2]) ->
     sel_setting(ui, s, dirty, "s-maxobj", c.row(), "Object distance", "max_obj_dist", &[("auto", "Automatic"), ("500", "500 m"), ("750", "750 m"), ("900", "900 m"), ("1500", "1500 m"), ("3000", "3000 m")]);
     sel_setting(ui, s, dirty, "s-minobj", c.row(), "Small objects", "min_obj_size", &[("0.005", "All"), ("0.013", "Normal"), ("0.02", "Fewer (faster)"), ("0.03", "Few (fastest)")]);
     sel_setting(ui, s, dirty, "s-mirror", c.row(), "Mirrors", "mirror_size", &[("0", "Off"), ("128", "Low (128)"), ("256", "Normal (256)"), ("512", "High (512)"), ("1024", "Very high (1024)")]);
+    sel_setting(ui, s, dirty, "s-mirror-refresh", c.row(), "Real-time reflections", "mirror_refresh", &[("off", "None (frozen picture)"), ("eco", "Economical"), ("full", "Full")]);
     // (the game takes the smaller of an eighth of the memory and what the graphics
     // adapter is taken to hold, see `memory::texture_budget`)
     let adapter_mb = omsi_render::ADAPTER_TEXTURE_MB.load(std::sync::atomic::Ordering::Relaxed) as i64;
@@ -612,6 +626,8 @@ fn driving_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, out: &mut Outside, c
         s["mouse_sens"] = json!((ms * 100.0).round() / 100.0);
         *dirty = 0.3;
     }
+    toggle_setting(ui, s, dirty, c.row(), "A right click ends the mouse steering (as in OMSI)", "mouse_right_off");
+    toggle_setting(ui, s, dirty, c.row(), "Indicators cancel themselves (as the bus's script does)", "blinker_cancel");
     toggle_setting(ui, s, dirty, c.row(), "The keyboard brake stays on until the throttle (as in OMSI)", "brake_hold");
     toggle_setting(ui, s, dirty, c.row(), "Automatic clutch (manual gearboxes)", "auto_clutch");
     toggle_setting(ui, s, dirty, c.row(), "Hold manual gear buttons (release returns to neutral)", "momentary_gears");
@@ -673,9 +689,21 @@ fn camera_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, out: &mut Outside, co
         }
         *dirty = 0.3;
     }
-    let mut fov = get(s, "fov").as_f64().unwrap_or(0.0) as f32;
+    let fov_key = if get(s, "triple_screen").as_bool().unwrap_or(false)
+        && !get(s, "vr").as_bool().unwrap_or(false)
+    {
+        "triple_fov_deg"
+    } else {
+        "fov"
+    };
+    let mut fov = get(s, fov_key).as_f64().unwrap_or(0.0) as f32;
     if ui.slider("s-fov", c.row(), &mut fov, 0.0, 120.0, 1.0, "Field of view", &|v| if v < 20.0 { "Default".to_string() } else { format!("{v:.0}°") }) {
-        s["fov"] = json!(if fov < 20.0 { 0.0 } else { fov.round() });
+        s[fov_key] = json!(if fov < 20.0 { 0.0 } else { fov.round() });
+        *dirty = 0.3;
+    }
+    let mut look = get(s, "look_sens").as_f64().unwrap_or(1.0) as f32;
+    if ui.slider("s-look-sens", c.row(), &mut look, 0.1, 2.0, 0.05, "Mouse look sensitivity", &|v| if (v - 1.0).abs() < 0.01 { "OMSI".to_string() } else { format!("{:.0}%", v * 100.0) }) {
+        s["look_sens"] = json!((look * 100.0).round() / 100.0);
         *dirty = 0.3;
     }
     toggle_setting(ui, s, dirty, c.row(), "Driver's view turns with the steering", "steer_look");
@@ -699,6 +727,122 @@ fn camera_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, out: &mut Outside, co
     toggle_setting(ui, s, dirty, c.row(), "Driver at the wheel (outside views)", "driver");
     c.section(ui, "Head tracking");
     toggle_setting(ui, s, dirty, c.row(), "Head tracking (TrackIR and others through opentrack, UDP 4242)", "head_tracking");
+    c.section(ui, "Triple screen");
+    toggle_setting(
+        ui,
+        s,
+        dirty,
+        c.row(),
+        "Three screen projections",
+        "triple_screen",
+    );
+    toggle_setting(
+        ui,
+        s,
+        dirty,
+        c.row(),
+        "Span three monitors at startup",
+        "triple_span",
+    );
+    toggle_setting(
+        ui,
+        s,
+        dirty,
+        c.row(),
+        "HUD on centre screen",
+        "triple_hud_center",
+    );
+    if get(s, "triple_screen").as_bool().unwrap_or(false) {
+        ui.label(
+            c.row(),
+            "Three equal screens in a horizontal row. OpenXR takes priority.",
+        );
+        let mut value = get(s, "triple_width_mm").as_f64().unwrap_or(600.0) as f32;
+        if ui.slider(
+            "s-triple-width_mm",
+            c.row(),
+            &mut value,
+            200.0,
+            2000.0,
+            10.0,
+            "Visible width of one panel",
+            &|v| format!("{v:.0} mm"),
+        ) {
+            s["triple_width_mm"] = json!(value);
+            *dirty = 0.3;
+        }
+        let mut value = get(s, "triple_distance_mm").as_f64().unwrap_or(650.0) as f32;
+        if ui.slider(
+            "s-triple-distance_mm",
+            c.row(),
+            &mut value,
+            200.0,
+            3000.0,
+            10.0,
+            "Eye to centre screen",
+            &|v| format!("{v:.0} mm"),
+        ) {
+            s["triple_distance_mm"] = json!(value);
+            s["triple_fov_deg"] = json!(0.0);
+            *dirty = 0.3;
+        }
+        let mut value = get(s, "triple_bezel_mm").as_f64().unwrap_or(0.0) as f32;
+        if ui.slider(
+            "s-triple-bezel_mm",
+            c.row(),
+            &mut value,
+            0.0,
+            100.0,
+            1.0,
+            "Both frames at each join",
+            &|v| format!("{v:.0} mm"),
+        ) {
+            s["triple_bezel_mm"] = json!(value);
+            *dirty = 0.3;
+        }
+        let mut value = get(s, "triple_left_angle_deg").as_f64().unwrap_or(45.0) as f32;
+        if ui.slider(
+            "s-triple-left_angle_deg",
+            c.row(),
+            &mut value,
+            0.0,
+            90.0,
+            1.0,
+            "Left screen inward angle",
+            &|v| format!("{v:.0}°"),
+        ) {
+            s["triple_left_angle_deg"] = json!(value);
+            *dirty = 0.3;
+        }
+        let mut value = get(s, "triple_right_angle_deg").as_f64().unwrap_or(45.0) as f32;
+        if ui.slider(
+            "s-triple-right_angle_deg",
+            c.row(),
+            &mut value,
+            0.0,
+            90.0,
+            1.0,
+            "Right screen inward angle",
+            &|v| format!("{v:.0}°"),
+        ) {
+            s["triple_right_angle_deg"] = json!(value);
+            *dirty = 0.3;
+        }
+        let mut value = get(s, "triple_eye_height_mm").as_f64().unwrap_or(0.0) as f32;
+        if ui.slider(
+            "s-triple-eye_height_mm",
+            c.row(),
+            &mut value,
+            -500.0,
+            500.0,
+            1.0,
+            "Eye above screen centre",
+            &|v| format!("{v:.0} mm"),
+        ) {
+            s["triple_eye_height_mm"] = json!(value);
+            *dirty = 0.3;
+        }
+    }
     if cfg!(windows) {
         c.section(ui, "Virtual reality");
         toggle_setting(ui, s, dirty, c.row(), "Use OpenXR headset", "vr");
@@ -751,7 +895,7 @@ fn gameplay_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, cols: [Rect; 2]) ->
     c.section(ui, "Traffic");
     sel_setting(ui, s, dirty, "s-unsched", c.row(), "Random traffic", "ai_unsched_factor", &[("25", "25%"), ("50", "50%"), ("75", "75%"), ("100", "100%"), ("150", "150%"), ("200", "200%")]);
     sel_setting(ui, s, dirty, "s-maxsched", c.row(), "Timetable vehicles", "ai_max_scheduled", &[("0", "All"), ("10", "At most 10"), ("25", "At most 25"), ("50", "At most 50")]);
-    sel_setting(ui, s, dirty, "s-maxpark", c.row(), "Parked cars", "ai_max_parked", &[("0", "Every space"), ("35", "At most 35"), ("100", "At most 100"), ("250", "At most 250")]);
+    sel_setting(ui, s, dirty, "s-maxpark", c.row(), "Parked cars", "ai_max_parked", &[("-1", "None"), ("0", "Every space"), ("35", "At most 35"), ("100", "At most 100"), ("250", "At most 250")]);
     let left = c.used();
     // OMSI's own options (options.cfg)
     let mut c = Col::new(ui, cols[1], "Simulation");
@@ -791,9 +935,20 @@ fn general_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, out: &mut Outside, c
         ui.text_in(&st, Rect::new(c.inner.x + 12.0, c.y - 6.0, c.inner.w - 24.0, 16.0), 11.5, omsi_ui::Weight::Regular, TEXT_FAINT, omsi_ui::paint::Align::Left);
         c.y += 14.0;
     }
+    toggle_setting(ui, s, dirty, c.row(), "The launcher rests while a game runs (gives the graphics card to the game)", "launcher_rest");
     toggle_setting(ui, s, dirty, c.row(), "Discord Rich Presence", "discord_status");
     let help_height = ui.paragraph(
         "Shows the launcher or your map, bus, line and multiplayer status in Discord.",
+        Vec2::new(c.inner.x + 12.0, c.y - 5.0),
+        c.inner.w - 24.0,
+        11.5,
+        omsi_ui::Weight::Regular,
+        TEXT_FAINT,
+    );
+    c.y += help_height + 3.0;
+    toggle_setting(ui, s, dirty, c.row(), "Voice chat through GreenTeaSpeak (multiplayer)", "voice_chat");
+    let help_height = ui.paragraph(
+        "Players near you are heard from where they stand, when GreenTeaSpeak runs with the openOMSI plugin and the server names a voice server.",
         Vec2::new(c.inner.x + 12.0, c.y - 5.0),
         c.inner.w - 24.0,
         11.5,
@@ -843,6 +998,12 @@ fn general_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, out: &mut Outside, c
         let on = cur == name;
         ui.p().rounded(cell, 3.0, if on { ACCENT } else { Color::WHITE.alpha(if h { 0.2 } else { 0.08 }) });
     }
+    // (dragged somewhere else in the game, #940: that place, until a corner is chosen)
+    if let Some(a) = crate::navigator::placed_at(&cur) {
+        let (cw, ch) = (screen.w * 0.5 - 10.0, screen.h * 0.5 - 10.0);
+        let cell = Rect::new(screen.x + 5.0 + a[0] * (screen.w - 10.0 - cw), screen.y + 5.0 + a[1] * (screen.h - 10.0 - ch), cw, ch);
+        ui.p().rounded(cell, 3.0, ACCENT);
+    }
     c.y += 74.0;
     let left = c.used();
     // updates from the GitHub releases (see `crate::updater`)
@@ -857,6 +1018,7 @@ fn general_tab(ui: &mut Ui, s: &mut Value, dirty: &mut f32, out: &mut Outside, c
             out.check_updates = true;
         }
         let text = match &out.update {
+            Status::UpToDate if crate::updater::is_test_build(crate::updater::current_version()) => format!("{} is a test build: it is not updated", crate::updater::current_version()),
             Status::UpToDate => format!("{} is the latest version", crate::updater::current_version()),
             Status::Available(rel) => format!("{} is available", rel.version),
             Status::Failed(_) => "The last check failed".to_string(),
@@ -913,6 +1075,8 @@ fn known_action(a: &str) -> Option<String> {
         ("blinker_right_toggle", "Indicator right (toggle)"),
         ("blinker_off", "Indicators off"),
         ("blinker_warn_toggle", "Hazard lights"),
+        ("gear_up", "Gear up (manual gearbox)"),
+        ("gear_down", "Gear down (manual gearbox)"),
         ("horn", "Horn"),
         ("kw_scheinwerfer_toggle", "Headlights"),
         ("kw_standlicht_toggle", "Sidelights"),
@@ -926,11 +1090,17 @@ fn known_action(a: &str) -> Option<String> {
         ("bus_doorfront0", "Front door (leaf 1)"),
         ("bus_doorfront1", "Front door (leaf 2)"),
         ("bus_dooraft", "Release rear doors"),
+        ("door_1", "Door 1 (front), any bus"),
+        ("door_2", "Door 2, any bus"),
+        ("door_3", "Door 3, any bus"),
+        ("door_4", "Door 4, any bus"),
+        ("doors_all", "All doors, any bus"),
         ("ticket_give", "Sell the requested ticket"),
         ("view_set_driver", "Driver's view"),
         ("view_set_passenger", "Passenger view"),
         ("view_set_outside", "Outside view"),
         ("view_toggle_viewpoint", "Next view"),
+        ("view_toggle_interior", "Cabin and outside, one key"),
         ("vr_recenter", "VR: Reset view"),
         ("vr_toggle_desktop_mirror", "VR: Monitor preview"),
         ("vr_toggle_mode", "VR: Switch VR / desktop"),
@@ -1037,9 +1207,27 @@ pub fn controls(l: &mut Launcher, area: Rect) {
             shown.sort_by_key(|(_, label, _, _)| !label.starts_with("VR:"));
         }
         let capturing = l.pages.capturing;
+        // what the row's buttons asked: (entry, cleared) a key cleared or to be pressed,
+        // `more` another key for an entry's action (#854)
         let mut clicked: Option<(usize, bool)> = None;
+        let mut more: Option<usize> = None;
         let time = l.ui.time;
-        l.ui.scroll_area(&format!("kb-{sec}"), Rect::new(inner.x - 6.0, inner.y + 62.0, inner.w + 12.0, inner.h - 62.0), &mut |ui, v| {
+        // a name the list does not have (a bus's own trigger a mod's readme gives a key, the
+        // Urbanway's `ASS_toggle`): added to the list as a key of its own, as an [entry]
+        // added to OMSI's keyboard.cfg by hand is (#854)
+        let new_action = filter.trim();
+        let mut list_top = inner.y + 62.0;
+        if shown.is_empty() && new_action.len() > 1 && new_action.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            if l.ui.button(&format!("kb-add-{sec}"), Rect::new(inner.x, list_top, inner.w, 36.0), &format!("Add \"{new_action}\" and give it a key"), Some("add"), ButtonKind::Normal) {
+                if let Some(a) = l.state.keybindings.get_mut(*key).and_then(|a| a.as_array_mut()) {
+                    a.push(json!({ "action": new_action, "scan_code": 0, "modifier": 0 }));
+                    l.pages.capturing = Some((sec, a.len() - 1));
+                }
+                // (the filter stays: the new row is the one it shows, waiting for its key)
+            }
+            list_top += 44.0;
+        }
+        l.ui.scroll_area(&format!("kb-{sec}"), Rect::new(inner.x - 6.0, list_top, inner.w + 12.0, inner.bottom() - list_top), &mut |ui, v| {
             let rh = 40.0;
             for (row, (i, label, keyn, clash)) in shown.iter().enumerate() {
                 let rr = Rect::new(v.x + 6.0, v.y + row as f32 * rh, v.w - 16.0, rh - 4.0);
@@ -1047,7 +1235,16 @@ pub fn controls(l: &mut Launcher, area: Rect) {
                     continue;
                 }
                 ui.p().rounded(rr, 8.0, Color::WHITE.alpha(0.03));
-                ui.text_in(label, Rect::new(rr.x + 12.0, rr.y, rr.w - 210.0, rr.h), 13.0, Weight::Medium, TEXT_SOFT, Align::Left);
+                ui.text_in(label, Rect::new(rr.x + 12.0, rr.y, rr.w - 240.0, rr.h), 13.0, Weight::Medium, TEXT_SOFT, Align::Left);
+                // another key for the same action (OMSI's file may give one action
+                // several [entry]s; several actions on one key need nothing more than the
+                // same key pressed for each)
+                let pr = Rect::new(rr.right() - 222.0, rr.y + 5.0, 26.0, rr.h - 10.0);
+                let (hp, _, cp) = ui.interact(id_of(&format!("kb-{sec}-{i}-more")), pr);
+                ui.icon("add", pr.center(), 16.0, if hp { ACCENT } else { TEXT_FAINT });
+                if cp {
+                    more = Some(*i);
+                }
                 let kr = Rect::new(rr.right() - 190.0, rr.y + 5.0, 150.0, rr.h - 10.0);
                 let waiting = capturing == Some((sec, *i));
                 let id = id_of(&format!("kb-{sec}-{i}"));
@@ -1081,6 +1278,16 @@ pub fn controls(l: &mut Launcher, area: Rect) {
             }
             Some((i, false)) => l.pages.capturing = Some((sec, i)),
             None => {}
+        }
+        if let Some(i) = more {
+            if let Some(a) = l.state.keybindings.get_mut(*key).and_then(|a| a.as_array_mut()) {
+                if let Some(b) = a.get(i).cloned() {
+                    // (the held bit is the action's: it goes with it)
+                    let hold = b.get("modifier").and_then(|x| x.as_i64()).unwrap_or(0) & omsi_content::input::KEY_HOLD as i64;
+                    a.insert(i + 1, json!({ "action": b.get("action").cloned().unwrap_or(json!("")), "scan_code": 0, "modifier": hold }));
+                    l.pages.capturing = Some((sec, i + 1));
+                }
+            }
         }
     }
     if !l.state.keybindings_error.is_empty() {
@@ -1258,7 +1465,7 @@ fn game_controllers(l: &mut Launcher, body: Rect) {
         }
     }
     // the game's own view actions (looking around while held, the cameras, the views)
-    for a in ["gear_up", "gear_down", "view_look_left", "view_look_right", "view_look_up", "view_look_down", "view_reset_direction", "view_interiorcam_plus", "view_interiorcam_minus", "view_toggle_viewpoint", "view_set_driver", "view_set_passenger", "view_set_outside", "sim_pause", "screenshot", "quicksave", "toggel_mouse_ctrl", "toggel_ctrler"] {
+    for a in ["doors_all", "door_4", "door_3", "door_2", "door_1", "gear_up", "gear_down", "view_look_left", "view_look_right", "view_look_up", "view_look_down", "view_reset_direction", "view_interiorcam_plus", "view_interiorcam_minus", "view_toggle_viewpoint", "view_toggle_interior", "view_set_driver", "view_set_passenger", "view_set_outside", "sim_pause", "screenshot", "quicksave", "toggel_mouse_ctrl", "toggel_ctrler"] {
         if !actions.iter().any(|x| x == a) {
             actions.insert(1, a.to_string());
         }
@@ -1347,6 +1554,7 @@ fn game_controllers(l: &mut Launcher, body: Rect) {
         let cw = (w - GAP * (cols - 1) as f32) / cols as f32;
         let per_row = ROW + 4.0;
         let rows = shown_buttons.div_ceil(cols);
+        let latching = &mut d.latching;
         for (b, (act, _)) in d.buttons.iter_mut().take(shown_buttons).enumerate() {
             let (col, row) = (b / rows.max(1), b % rows.max(1));
             let r = Rect::new(x0 + col as f32 * (cw + GAP), y + row as f32 * per_row, cw, ROW);
@@ -1358,9 +1566,21 @@ fn game_controllers(l: &mut Launcher, body: Rect) {
                 ui.p().rounded(Rect::new(r.x - 4.0, r.y - 2.0, r.w + 8.0, r.h + 4.0), 6.0, ACCENT.alpha(0.28));
             }
             ui.label(Rect::new(r.x, r.y, 90.0, r.h), &label);
+            // (a latching switch - a turn signal lever, a lit hazard button - also switches
+            // when it comes out)
+            let latch_w = 104.0;
             let mut sel = actions.iter().position(|a| a.eq_ignore_ascii_case(act)).unwrap_or(0);
-            if ui.select(&format!("pad-btn-{b}"), Rect::new(r.x + 90.0, r.y, r.w - 90.0, r.h), &mut sel, &labels) {
+            if ui.select(&format!("pad-btn-{b}"), Rect::new(r.x + 90.0, r.y, r.w - 90.0 - latch_w - GAP, r.h), &mut sel, &labels) {
                 *act = if sel == 0 { String::new() } else { actions[sel].clone() };
+                dirty = true;
+            }
+            let mut latched = latching.contains(&b);
+            if ui.toggle(&format!("pad-latch-{b}"), Rect::new(r.right() - latch_w, r.y, latch_w, r.h), &mut latched, "Latching") {
+                latching.retain(|x| *x != b);
+                if latched {
+                    latching.push(b);
+                    latching.sort_unstable();
+                }
                 dirty = true;
             }
         }
@@ -2231,18 +2451,41 @@ mod settings_tests {
         let mut graphics = vec![
             "s-gp-sel", "s-gp-load", "s-gp-del", "s-gp-name", "s-gp-save",
             "s-preset", "s-graphics", "s-msaa", "s-scale", "s-af", "s-shadow", "set-ssao", "set-shadows", "s-casters", "set-detail_textures", "s-led", "s-led-mip", "set-shadow_blobs", "set-reflections", "set-clouds",
-            "set-fullscreen", "set-vsync", "s-fps", "s-view", "s-maxobj", "s-minobj", "s-mirror", "s-texmem", "set-texture_compression",
+            "set-fullscreen", "s-res", "set-vsync", "s-fps", "s-view", "s-maxobj", "s-minobj", "s-mirror", "s-mirror-refresh", "s-texmem", "set-texture_compression",
         ];
         if !cfg!(target_os = "macos") {
             graphics.push("s-api");
         }
         let driving = vec![
-            "s-keys", "set-steering_linear", "set-old_steering", "set-red_steer_spd", "s-mouse", "set-brake_hold", "set-auto_clutch", "set-momentary_gears", "s-go-keys",
+            "s-keys", "set-steering_linear", "set-old_steering", "set-red_steer_spd", "s-mouse", "set-mouse_right_off", "set-blinker_cancel", "set-brake_hold", "set-auto_clutch", "set-momentary_gears", "s-go-keys",
             "s-wrange", "s-wlock", "s-pedt", "s-pedb", "set-ff_enabled", "set-ff_invert", "s-wreset", "s-go-pads",
         ];
         let mut camera = vec![
-            "s-seaty", "s-seatz", "s-seatx", "s-seatreset", "s-fov", "set-steer_look", "s-steer-look-angle", "s-steer-look-response", "set-head_movement", "set-driverview_smooth", "set-hands_in_cab", "set-alt_view",
-            "set-camera_collision", "set-driver", "set-head_tracking",
+            "s-seaty",
+            "s-seatz",
+            "s-seatx",
+            "s-seatreset",
+            "s-fov",
+            "s-look-sens",
+            "set-steer_look",
+            "s-steer-look-angle",
+            "s-steer-look-response",
+            "set-head_movement",
+            "set-driverview_smooth",
+            "set-hands_in_cab",
+            "set-alt_view",
+            "set-camera_collision",
+            "set-driver",
+            "set-head_tracking",
+            "set-triple_screen",
+            "set-triple_span",
+            "set-triple_hud_center",
+            "s-triple-width_mm",
+            "s-triple-distance_mm",
+            "s-triple-bezel_mm",
+            "s-triple-left_angle_deg",
+            "s-triple-right_angle_deg",
+            "s-triple-eye_height_mm",
         ];
         if cfg!(windows) {
             camera.extend(["set-vr", "s-vr-scale", "s-vr-head-smoothing", "s-vr-mirror-rate", "set-vr_desktop_mirror", "s-go-vr-keys"]);
@@ -2253,7 +2496,7 @@ mod settings_tests {
             "s-maint", "set-collision_vehicles", "set-collision_objects", "set-collision_pedestrians", "set-use_real_time", "set-use_real_date", "set-time_sync", "set-metar_sync", "s-timespeed",
         ];
         let general = vec![
-            "s-lang", "set-machine_translation", "set-discord_status", "s-uiscale", "set-ui_scale_window", "s-uiop", "set-tooltips", "set-show_fps", "set-notes", "set-chat", "set-name_tags",
+            "s-lang", "set-machine_translation", "set-launcher_rest", "set-discord_status", "set-voice_chat", "s-uiscale", "set-ui_scale_window", "s-uiop", "set-tooltips", "set-show_fps", "set-notes", "set-chat", "set-name_tags",
             "set-navigator", "set-nav_arrows", "set-nav_ai", "corner-top-left", "corner-top-right", "corner-bottom-left", "corner-bottom-right",
             "set-update_check", "set-update_auto", "s-upd-check", "s-upd-github", "s-reset",
         ];
@@ -2263,6 +2506,7 @@ mod settings_tests {
     /// Settings that show every row: Enhanced (Vanilla hides the shadows and effects), VR on.
     fn all_rows() -> Value {
         let mut s = core::settings_from_text(None);
+        s["triple_screen"] = json!(true);
         s["graphics"] = json!("enhanced");
         s["vr"] = json!(true);
         s

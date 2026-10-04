@@ -493,11 +493,15 @@ impl State {
             self.set_status("The server has not answered yet (is its address right? is it running?)", true);
             return;
         };
+        // A map not installed here comes with the server's mods when the game joins
+        // (`lan_mods`), so this is a notice, not a refusal. The Drive page needs a map of
+        // this installation chosen, so the choice stays as it is then: `duty()` starts the
+        // game on the server's map anyway.
         if !self.maps.is_empty() && !self.maps.iter().any(|m| m.file.eq_ignore_ascii_case(&info.map)) {
-            self.set_status(format!("The server plays {}, which is not installed here: install that map first.", info.map), true);
-            return;
+            self.set_status(format!("The server plays {}, which is not installed here: it is fetched from the server on joining.", info.map), false);
+        } else {
+            self.choice.map = info.map.clone();
         }
-        self.choice.map = info.map.clone();
         self.choice.lan_mode = "join".into();
         // (a server added by its bare address is joined where it answered: its web gateway)
         let bare = omsi_net::ws::ws_url(address).is_none() && !omsi_net::official::is_alias(address);
@@ -1049,7 +1053,21 @@ impl State {
         });
         let want = on_date.or_else(|| self.map().map(|m| m.hof.clone())).unwrap_or_default();
         let Some(v) = self.bus() else { return want };
-        v.hofs.iter().find(|h| h.eq_ignore_ascii_case(&want)).cloned().or(Some(want).filter(|w| !w.is_empty())).or_else(|| v.hofs.first().cloned()).unwrap_or_default()
+        // (the bus's own depot of the same place before the map's borrowed from another
+        // bus, and one named like the map before its first, #896)
+        let names: Vec<&str> = v.hofs.iter().map(|h| h.as_str()).collect();
+        let like = |hints: &[&str]| omsi_vehicle::hof::closest_name(&names, hints).map(|i| v.hofs[i].clone());
+        let map_hints: Vec<String> = self.map().map(|m| vec![m.name.clone(), m.friendly.clone(), m.file.trim_end_matches("/global.cfg").rsplit('/').next().unwrap_or("").to_string()]).unwrap_or_default();
+        let map_hints: Vec<&str> = map_hints.iter().map(|h| h.as_str()).collect();
+        v.hofs
+            .iter()
+            .find(|h| h.eq_ignore_ascii_case(&want))
+            .cloned()
+            .or_else(|| like(&[want.as_str()]))
+            .or(Some(want.clone()).filter(|w| !w.is_empty()))
+            .or_else(|| like(&map_hints))
+            .or_else(|| v.hofs.first().cloned())
+            .unwrap_or_default()
     }
 
     pub fn select_bus(&mut self, file: &str) {
