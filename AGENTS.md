@@ -10,14 +10,14 @@
 git status --short --branch
 git fetch upstream
 git switch main
-git pull --ff-only upstream main
+git merge --ff-only upstream/main
 ```
 
 若目前有未提交變更，必須先保留或處理這些變更，再進行同步；不得覆蓋或捨棄既有工作。
 
 若同步時發生 merge conflict，必須停止並回報衝突檔案與待決定的處理方式，不得猜測或覆蓋衝突內容。
 
-每個新功能或修復都必須從已同步的 `main` 建立獨立分支。分支名稱使用 `codex/` 前綴，並以簡短英文描述目的，例如：
+每個新功能或修復都必須從已整合最新 `upstream/main` 的本地 `main` 建立獨立分支。不得直接從官方 `upstream/main` 建立，避免遺失本 repository 的開發規範。分支名稱使用 `codex/` 前綴，並以簡短英文描述目的，例如：
 
 ```powershell
 git switch -c codex/generic-addon-loading
@@ -57,7 +57,7 @@ git switch -c codex/generic-addon-loading
 - 變更完成後執行與範圍相符的驗證；至少遵循 `CONTRIBUTING.md` 要求的 `cargo test --workspace` 與 `cargo build --release`，必要時執行 `omsi-check`。
 - 使用者要求測試 executable 時，必須先完成建置並提供可執行檔或其所在位置，讓使用者自行測試。
 - 在使用者確認測試結果前，不得自行建立或提交 PR。使用者決定提 PR 後，才依專案要求建立英文 PR，並確認 base repository、base branch、commit 與 changed files 僅包含本次工作。
-- 新功能分支的基準必須是最新的 `upstream/main`；建立 PR 前確認 base repository 為官方 repository，base branch 為 `main`。
+- 新功能分支的基準必須是已整合最新 `upstream/main` 的本地 `main`；建立 PR 前確認 base repository 為官方 repository，base branch 為 `main`。
 - 禁止使用 `git push --force`。若確實需要重寫私有分支歷史，必須先取得明確授權，並使用 `--force-with-lease`。
 - 修改 Core、載入器、格式解析或共用 API 時，必須驗證既有 Add-on 的相容性；無法執行完整相容性檢查時，必須在 PR 中說明原因。
 - 新增依賴前必須確認其授權、維護狀態與跨平台支援；不得提交原始 OMSI 資產、下載內容、建置產物、cache 或個人設定。
