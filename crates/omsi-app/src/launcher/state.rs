@@ -35,6 +35,8 @@ pub enum Msg {
     /// A background job stopped on an error of its own (a panic): whatever it was loading
     /// is not coming.
     Crashed(String),
+    /// The support package was saved there (Setup → Export diagnostics), or why not.
+    Diagnostics(Result<std::path::PathBuf, String>),
 }
 
 /// A server in the Multiplayer page's list (`~/.openomsi/servers.json`), as the player
@@ -111,6 +113,10 @@ pub struct Choice {
     pub date: String,
     /// "auto", spring, summer, autumn, winter.
     pub season: String,
+    /// The season's phase: early, mid, late (with a season chosen).
+    pub phase: String,
+    /// The player's own date from before a season moved it ("By date" gives it back).
+    pub own_date: Option<String>,
     pub weather: String,
     pub traffic: f32,
     pub passengers: bool,
@@ -143,6 +149,8 @@ impl Default for Choice {
             start_trip: None,
             date: "1989-05-30".into(),
             season: "auto".into(),
+            phase: "mid".into(),
+            own_date: None,
             weather: String::new(),
             traffic: 30.0,
             passengers: true,
@@ -182,6 +190,11 @@ impl Choice {
         // (older launchers took a vehicle line of a broken ailists.cfg for the map's depot)
         if c.hof.to_ascii_lowercase().contains(".bus") || c.hof.to_ascii_lowercase().contains(".ovh") {
             c.hof.clear();
+        }
+        // a season chosen: the date in its phase, as the game will have it (older launchers
+        // kept the day of the month; the date may have followed the computer's since)
+        if let Some(d) = crate::season_phase::launcher_date(&c.season, &c.phase, &c.date, &c.map, true) {
+            c.date = d;
         }
         c
     }
@@ -365,7 +378,7 @@ impl State {
         self.spawn(move || Msg::Launched(core::launch(&d).map_err(|e| format!("{e:#}"))));
     }
 
-    fn spawn(&self, f: impl FnOnce() -> Msg + Send + 'static) {
+    pub(crate) fn spawn(&self, f: impl FnOnce() -> Msg + Send + 'static) {
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             // (a job that panics - an odd file of some mod - sent nothing, and the page
@@ -636,7 +649,7 @@ impl State {
             paint: Some(c.paint.clone()).filter(|p| !p.is_empty()),
             plate: Some(c.plate.clone()).filter(|p| !p.trim().is_empty()),
             number: Some(c.number.clone()).filter(|n| !n.trim().is_empty()),
-            hof: Some(c.hof.clone()).filter(|p| !p.is_empty()),
+            hof: Some(if c.hof_manual { c.hof.clone() } else { self.default_hof() }).filter(|p| !p.is_empty()),
             entry: Some(c.entry),
             line: if c.free { None } else { c.line.clone() },
             tour: if c.free { None } else { c.tour.clone() },
@@ -653,7 +666,7 @@ impl State {
             profile: Some(self.config.profile.clone()).filter(|p| !p.is_empty()),
             lan: Some(lan),
             lan_name: None,
-            season: Some(c.season.clone()).filter(|s| s != "auto"),
+            season: Some(c.season.clone()).filter(|s| s != "auto").map(|s| crate::season_phase::launcher_choice(&s, &c.phase).map(|x| x.word()).unwrap_or(s)),
             tutorial: None,
             situation: None,
         }
@@ -750,6 +763,8 @@ impl State {
     fn follow_clock(&mut self) {
         let on = |k: &str| self.settings.get(k).and_then(|v| v.as_bool()).unwrap_or(false);
         let (time, date, year) = (on("use_real_time"), on("use_real_date"), on("use_real_year"));
+        // (a season chosen sets the date: its phase's, see `season_chosen`)
+        let date = date && self.choice.season == "auto";
         if !time && !date {
             return;
         }
@@ -807,6 +822,16 @@ impl State {
 
     fn handle(&mut self, m: Msg) {
         match m {
+            Msg::Diagnostics(Ok(path)) => {
+                self.set_status(omsi_ui::tr("Support package saved: {}").replacen("{}", &path.display().to_string(), 1), false);
+                // (its folder opened, for the player to look inside before attaching it)
+                if !core::IN_PROCESS_GAMES {
+                    if let Some(dir) = path.parent() {
+                        crate::updater::open_url(&dir.to_string_lossy());
+                    }
+                }
+            }
+            Msg::Diagnostics(Err(why)) => self.set_status(omsi_ui::tr("Could not export diagnostics: {why}").replacen("{why}", &why, 1), true),
             Msg::Crashed(why) => {
                 log::error!("launcher: a background job stopped: {why}");
                 self.loading_content = false;
@@ -1006,7 +1031,13 @@ impl State {
                     Err(e) => core::log_to_file(&format!("poll: {e}")),
                 }
             }
-            Msg::Profile(Ok(p)) => self.profile = Some(p),
+            Msg::Profile(Ok(p)) => {
+                // A read started before another driver was selected must not put the
+                // old profile back on screen after deletion.
+                if p.name.eq_ignore_ascii_case(&self.config.profile) {
+                    self.profile = Some(p);
+                }
+            }
             Msg::Profile(Err(e)) => {
                 self.profile = None;
                 core::log_to_file(&format!("profile: {e}"));
@@ -1014,11 +1045,12 @@ impl State {
             Msg::Profiles(p) => {
                 self.profiles = p;
                 if !self.profiles.contains(&self.config.profile) {
-                    if let Some(f) = self.profiles.first() {
-                        self.config.profile = f.clone();
-                        let _ = core::save_config(&self.config);
-                        self.load_profile();
-                    }
+                    self.config.profile = self.profiles.first().cloned().unwrap_or_default();
+                    self.profile = None;
+                    let _ = core::save_config(&self.config);
+                }
+                if !self.config.profile.is_empty() {
+                    self.load_profile();
                 }
             }
             Msg::Ibis { key, info } => self.ibis = Some((key, info)),
@@ -1117,6 +1149,17 @@ impl State {
         let like = |hints: &[&str]| omsi_vehicle::hof::closest_name(&names, hints).map(|i| v.hofs[i].clone());
         let map_hints: Vec<String> = self.map().map(|m| vec![m.name.clone(), m.friendly.clone(), m.file.trim_end_matches("/global.cfg").rsplit('/').next().unwrap_or("").to_string()]).unwrap_or_default();
         let map_hints: Vec<&str> = map_hints.iter().map(|h| h.as_str()).collect();
+        // a depot file carrying the line driven: the day's, one named like the map, else the fullest
+        let with_line = match (&self.choice.line, self.choice.free) {
+            (Some(line), false) => core::depot_names_with_line(std::path::Path::new(&self.config.root), &v.file, line),
+            _ => Vec::new(),
+        };
+        if !with_line.is_empty() && !with_line.iter().any(|h| h.eq_ignore_ascii_case(&want)) {
+            let names: Vec<&str> = with_line.iter().map(|h| h.as_str()).collect();
+            let hints: Vec<&str> = std::iter::once(want.as_str()).chain(map_hints.iter().copied()).collect();
+            let pick = omsi_vehicle::hof::closest_name(&names, &hints).unwrap_or(0);
+            return with_line[pick].clone();
+        }
         v.hofs
             .iter()
             .find(|h| h.eq_ignore_ascii_case(&want))
