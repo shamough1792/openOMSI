@@ -17,10 +17,10 @@ git merge --ff-only upstream/main
 
 若同步時發生 merge conflict，必須停止並回報衝突檔案與待決定的處理方式，不得猜測或覆蓋衝突內容。
 
-每個新功能或修復都必須從已整合最新 `upstream/main` 的本地 `main` 建立獨立分支。不得直接從官方 `upstream/main` 建立，避免遺失本 repository 的開發規範。分支名稱使用 `codex/` 前綴，並以簡短英文描述目的，例如：
+每個新功能或修復都必須從已整合最新 `upstream/main` 的本地 `main` 建立獨立分支。不得直接從官方 `upstream/main` 建立，避免遺失本 repository 的開發規範。分支名稱不得使用 `codex/` 前綴，並使用簡短、清楚的英文描述目的，例如：
 
 ```powershell
-git switch -c codex/generic-addon-loading
+git switch -c generic-addon-loading
 ```
 
 不得直接在 `main` 上開發或提交變更。
