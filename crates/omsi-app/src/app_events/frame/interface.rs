@@ -290,6 +290,8 @@ impl App {
         menu_lines: Vec<(&'static str, &'static str)>,
         menu_tabs: Option<(Vec<String>, usize)>,
     ) {
+        // (the steering cross: before the renderer and the scene are borrowed)
+        let steer_cross = self.steer_cross_point();
         let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) else { return };
         if let (Some(ui), Some(s)) = (self.ui.as_mut(), self.gfx.surface.as_ref()) {
             let scale = self.window.as_ref().map(|w| w.scale_factor() as f32).unwrap_or(1.0);
@@ -365,6 +367,7 @@ impl App {
             // (the game menu's greyed-out lines: the timetable needs an active route)
             let menu_disabled: &[&str] = &[];
             let (menu_kind, menu_head, menu_preview) = crate::game_lists::menu_extras(self.menus.list_kind.as_ref(), self.menus.admin_list.as_deref(), chooser_sel, self.session.schedule.as_ref(), self.clock.time);
+            crate::telemetry::publish(self.player.as_ref(), self.session.duty.as_ref(), self.session.humans.as_ref(), self.paused, self.session.schedule.as_ref(), self.session.traffic.as_ref());
             let frame = ui::Frame {
                 scale,
                 ui_scale: ui::size_factor(h, scale, self.settings.ui_scale, self.settings.ui_scale_window),
@@ -372,6 +375,7 @@ impl App {
                 width: w,
                 height: h,
                 cursor: (self.input.cursor.0 - hud[0], self.input.cursor.1),
+                steer_cross: steer_cross.map(|(x, y)| (x - hud[0], y)),
                 vr: {
                     #[cfg(windows)] { self.xr.vr.is_some() }
                     #[cfg(not(windows))] { false }
