@@ -6,39 +6,22 @@
 //! `OMSI_MOBILE=1` gives the desktop launcher the same layout (with `OMSI_LAUNCHER_SIZE`
 //! the size of a phone), so that it can be looked at without a phone.
 
-use super::theme::*;
-use super::ui::ButtonKind;
 use super::{Launcher, Page};
 use glam::Vec2;
-use omsi_ui::paint::Align;
-use omsi_ui::{Rect, Weight};
 use std::path::{Path, PathBuf};
 use winit::event::{Touch, TouchPhase};
-
-/// Width of the rail of icons on a phone.
-pub const RAIL_W_MOBILE: f32 = 64.0;
-/// The height the pages are laid out for on a phone (they scroll within the screen).
-pub const PAGE_H: f32 = 700.0;
-/// How far a finger moves (interface points) before a touch is a drag, not a tap.
-const SLOP: f32 = 9.0;
 
 /// Whether the launcher is laid out for fingers.
 pub fn mobile() -> bool {
     crate::platform::MOBILE || omsi_cfg::flags::OMSI_MOBILE.is_set()
 }
 
-/// The fingers on the launcher.
+/// The fingers on the launcher (the interface takes the first as its pointer).
 #[derive(Default)]
 pub struct Fingers {
-    /// The finger that works the interface: its id, where it went down, and whether it has
-    /// become a drag (a scroll, or turning the bus).
-    main: Option<(u64, Vec2, bool)>,
     /// Where each finger is (interface points), for the pinch over the bus.
     at: Vec<(u64, Vec2)>,
     pinch: Option<f32>,
-    /// The finger came up last frame: the pointer leaves the screen this frame (no hover
-    /// stays behind where it was).
-    lift: bool,
 }
 
 /// What the storage browser chooses.
@@ -57,10 +40,10 @@ pub struct Browser {
     pub purpose: Purpose,
     pub dir: PathBuf,
     /// (name, is a folder, bytes)
-    entries: Vec<(String, bool, u64)>,
+    pub(crate) entries: Vec<(String, bool, u64)>,
     /// The folder is a complete OMSI 2 (Root only).
-    is_root: bool,
-    error: Option<String>,
+    pub(crate) is_root: bool,
+    pub(crate) error: Option<String>,
 }
 
 /// The places a phone keeps files: the shared storage and any card or stick.
@@ -70,15 +53,22 @@ pub fn storage_roots() -> Vec<(String, PathBuf)> {
     if shared.is_dir() {
         v.push(("Internal storage".to_string(), shared));
     }
-    if let Ok(rd) = std::fs::read_dir("/storage") {
-        for e in rd.flatten() {
-            let n = e.file_name().to_string_lossy().to_string();
-            if n == "emulated" || n == "self" {
-                continue;
-            }
-            if e.path().is_dir() {
-                v.push((format!("Card {n}"), e.path()));
-            }
+    // the cards: /storage's own folders, where the system lets them be listed, and the
+    // volumes mounted there - since Android 11 /storage itself is not readable even with
+    // the access to all files, and the SD card did not show up at all (#1306)
+    let mut cards: Vec<String> = std::fs::read_dir("/storage").map(|rd| rd.flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect()).unwrap_or_default();
+    if let Ok(mounts) = std::fs::read_to_string("/proc/mounts") {
+        cards.extend(storage_volumes(&mounts));
+    }
+    cards.sort();
+    cards.dedup();
+    for n in cards {
+        if n == "emulated" || n == "self" {
+            continue;
+        }
+        let p = PathBuf::from("/storage").join(&n);
+        if p.is_dir() {
+            v.push((format!("Card {n}"), p));
         }
     }
     if v.is_empty() {
@@ -87,6 +77,26 @@ pub fn storage_roots() -> Vec<(String, PathBuf)> {
         }
     }
     v
+}
+
+/// The volumes `/proc/mounts` has under /storage (`/storage/1A2B-3C4D`): their names.
+fn storage_volumes(mounts: &str) -> Vec<String> {
+    mounts
+        .lines()
+        .filter_map(|l| l.split_whitespace().nth(1))
+        .filter_map(|m| m.strip_prefix("/storage/"))
+        .filter(|n| !n.is_empty() && !n.contains('/'))
+        .map(|n| n.to_string())
+        .collect()
+}
+
+#[cfg(test)]
+mod storage_tests {
+    #[test]
+    fn an_sd_card_is_found_in_the_mounts() {
+        let mounts = "/dev/fuse /storage/emulated fuse rw 0 0\n/dev/fuse /storage/1A2B-3C4D fuse rw 0 0\n/dev/block/vold/public:179,65 /mnt/media_rw/1A2B-3C4D vfat rw 0 0\n";
+        assert_eq!(super::storage_volumes(mounts), vec!["emulated".to_string(), "1A2B-3C4D".to_string()]);
+    }
 }
 
 impl Browser {
@@ -102,7 +112,7 @@ impl Browser {
         b
     }
 
-    fn open(&mut self, dir: PathBuf) {
+    pub(crate) fn open(&mut self, dir: PathBuf) {
         self.entries.clear();
         self.error = None;
         match std::fs::read_dir(&dir) {
@@ -132,7 +142,7 @@ impl Browser {
         self.dir = dir;
     }
 
-    fn title(&self) -> &'static str {
+    pub(crate) fn title(&self) -> &'static str {
         match self.purpose {
             Purpose::Root => "Choose the OMSI 2 folder",
             Purpose::ModFolder => "Choose the mod folder",
@@ -142,40 +152,20 @@ impl Browser {
 }
 
 impl Launcher {
-    /// A finger on the screen, as the mouse the interface knows: a tap is a click, a drag
-    /// scrolls (the list under it, else the page), a drag over the bus turns it and two
-    /// fingers over it zoom.
-    pub(super) fn touch(&mut self, t: Touch, scale: f32) {
+
+    /// Two fingers with the new interface (which takes one finger as the pointer): spread
+    /// or pinched, they zoom the bus.
+    pub(super) fn gui_pinch(&mut self, t: Touch, scale: f32) {
         let p = Vec2::new(t.location.x as f32, t.location.y as f32) / scale;
-        self.last_input = std::time::Instant::now();
-        self.ui.input.touch = true;
         match t.phase {
             TouchPhase::Started => {
                 self.fingers.at.retain(|(id, _)| *id != t.id);
                 self.fingers.at.push((t.id, p));
                 if self.fingers.at.len() == 2 {
-                    // a second finger: a pinch over the bus, never a click
-                    let (a, b) = (self.fingers.at[0].1, self.fingers.at[1].1);
-                    self.fingers.pinch = Some(a.distance(b).max(1.0));
-                    if let Some((_, _, drag)) = self.fingers.main.as_mut() {
-                        *drag = true;
-                    }
-                    return;
-                }
-                if self.fingers.main.is_some() {
-                    return;
-                }
-                self.fingers.main = Some((t.id, p, false));
-                self.fingers.lift = false;
-                self.ui.input.mouse = p;
-                self.ui.input.pressed = true;
-                self.ui.input.down = true;
-                if self.preview_rect.map(|r| r.contains(p)).unwrap_or(false) {
-                    self.dragging = Some(p);
+                    self.fingers.pinch = Some(self.fingers.at[0].1.distance(self.fingers.at[1].1).max(1.0));
                 }
             }
             TouchPhase::Moved => {
-                let prev = self.fingers.at.iter().find(|(id, _)| *id == t.id).map(|f| f.1);
                 if let Some(f) = self.fingers.at.iter_mut().find(|(id, _)| *id == t.id) {
                     f.1 = p;
                 }
@@ -183,28 +173,6 @@ impl Launcher {
                     let d = self.fingers.at[0].1.distance(self.fingers.at[1].1).max(1.0);
                     self.showroom.zoom_by((d0 / d).clamp(0.8, 1.25));
                     self.fingers.pinch = Some(d);
-                    return;
-                }
-                let Some((id, start, drag)) = self.fingers.main else { return };
-                if id != t.id {
-                    return;
-                }
-                let delta = prev.map(|q| p - q).unwrap_or(Vec2::ZERO);
-                if !drag && p.distance(start) > SLOP {
-                    self.fingers.main = Some((id, start, true));
-                }
-                if let Some(last) = self.dragging {
-                    let d = p - last;
-                    self.showroom.orbit(d.x, d.y);
-                    self.dragging = Some(p);
-                    self.ui.input.mouse = p;
-                    return;
-                }
-                // a slider or a scroll bar held keeps the finger; anything else scrolls
-                let held_slider = self.ui.active.is_some() && self.ui.input.down && !self.fingers.main.map(|m| m.2).unwrap_or(false);
-                self.ui.input.mouse = p;
-                if self.fingers.main.map(|m| m.2).unwrap_or(false) && !held_slider {
-                    self.ui.input.wheel.y += delta.y / 42.0;
                 }
             }
             TouchPhase::Ended | TouchPhase::Cancelled => {
@@ -212,30 +180,7 @@ impl Launcher {
                 if self.fingers.at.len() < 2 {
                     self.fingers.pinch = None;
                 }
-                let Some((id, _, drag)) = self.fingers.main else { return };
-                if id != t.id {
-                    return;
-                }
-                self.fingers.main = None;
-                self.dragging = None;
-                if drag || t.phase == TouchPhase::Cancelled {
-                    // a scroll is not a click on what the finger came up over
-                    self.ui.input.mouse = Vec2::new(-1e4, -1e4);
-                } else {
-                    self.ui.input.mouse = p;
-                }
-                self.ui.input.released = true;
-                self.ui.input.down = false;
-                self.fingers.lift = true;
             }
-        }
-    }
-
-    /// Once a frame after the interface was drawn: a lifted finger leaves no hover behind.
-    pub(super) fn touch_frame(&mut self) {
-        if self.fingers.lift && !self.ui.input.released {
-            self.fingers.lift = false;
-            self.ui.input.mouse = Vec2::new(-1e4, -1e4);
         }
     }
 
@@ -245,116 +190,7 @@ impl Launcher {
         self.browser = Some(Browser::new(purpose, start));
     }
 
-    /// The storage browser over the page, when it is open.
-    pub(super) fn draw_browser(&mut self) {
-        let Some(mut b) = self.browser.take() else { return };
-        let size = self.ui.size;
-        let full = Rect::new(0.0, 0.0, size.x, size.y);
-        self.ui.solid(full);
-        self.ui.p().rect(full, omsi_ui::Color::rgba(0, 0, 0, 0.72));
-        let r = Rect::new(24.0, 14.0, size.x - 48.0, size.y - 28.0);
-        self.ui.panel(r);
-        let inner = Rect::new(r.x + 16.0, r.y + 12.0, r.w - 32.0, r.h - 24.0);
-        self.ui.text_in(b.title(), Rect::new(inner.x, inner.y, inner.w - 130.0, 26.0), 17.0, Weight::Bold, TEXT, Align::Left);
-        let mut close = self.ui.button("browse-cancel", Rect::new(inner.right() - 120.0, inner.y - 2.0, 120.0, 34.0), "Cancel", Some("close"), ButtonKind::Ghost);
-        // the places, then the folder we are in
-        let mut x = inner.x;
-        let y = inner.y + 34.0;
-        let mut go_to: Option<PathBuf> = None;
-        if self.ui.button("browse-up", Rect::new(x, y, 44.0, 34.0), "", Some("drive_folder_upload"), ButtonKind::Normal) {
-            if let Some(p) = b.dir.parent() {
-                go_to = Some(p.to_path_buf());
-            }
-        }
-        x += 52.0;
-        for (k, (name, path)) in storage_roots().into_iter().enumerate() {
-            let w = self.ui.width(&name, 13.0, Weight::Medium) + 48.0;
-            if x + w > inner.right() {
-                break;
-            }
-            if self.ui.button(&format!("browse-root-{k}"), Rect::new(x, y, w, 34.0), &name, Some("sd_card"), ButtonKind::Normal) {
-                go_to = Some(path);
-            }
-            x += w + 8.0;
-        }
-        let path_y = y + 42.0;
-        self.ui.icon("folder_open", Vec2::new(inner.x + 10.0, path_y + 11.0), 16.0, TEXT_DIM);
-        let shown = self.ui.fonts.fit(&b.dir.to_string_lossy(), 12.5, Weight::Medium, inner.w - 30.0);
-        self.ui.text_in(&shown, Rect::new(inner.x + 26.0, path_y, inner.w - 26.0, 22.0), 12.5, Weight::Medium, TEXT_SOFT, Align::Left);
-        // what to do with this folder
-        let foot_h = 46.0;
-        let foot = Rect::new(inner.x, inner.bottom() - foot_h + 6.0, inner.w, foot_h - 6.0);
-        let mut chosen: Option<PathBuf> = None;
-        match b.purpose {
-            Purpose::Root => {
-                let (text, c) = if b.is_root { ("A complete OMSI 2 installation", OK) } else { ("Not an OMSI 2 folder (it needs Omsi.exe, maps and Vehicles)", TEXT_DIM) };
-                self.ui.text_in(text, Rect::new(foot.x, foot.y, foot.w - 230.0, foot.h), 12.5, Weight::Medium, c, Align::Left);
-                if self.ui.button("browse-use", Rect::new(foot.right() - 220.0, foot.y, 220.0, foot.h), "Use this folder", Some("check"), if b.is_root { ButtonKind::Primary } else { ButtonKind::Normal }) {
-                    chosen = Some(b.dir.clone());
-                }
-            }
-            Purpose::ModFolder => {
-                if self.ui.button("browse-use", Rect::new(foot.right() - 220.0, foot.y, 220.0, foot.h), "Install this folder", Some("download"), ButtonKind::Primary) {
-                    chosen = Some(b.dir.clone());
-                }
-            }
-            Purpose::ModZip => {
-                self.ui.text_in("Tap a .zip, .7z or .rar to install it", Rect::new(foot.x, foot.y, foot.w, foot.h), 12.5, Weight::Regular, TEXT_DIM, Align::Left);
-            }
-        }
-        // the folder's contents
-        let list = Rect::new(inner.x, path_y + 28.0, inner.w, foot.y - path_y - 36.0);
-        self.ui.p().rounded(list, 6.0, FIELD);
-        if let Some(e) = b.error.clone() {
-            self.ui.paragraph(&e, Vec2::new(list.x + 12.0, list.y + 12.0), list.w - 24.0, 13.0, Weight::Regular, DANGER);
-        } else if b.entries.is_empty() {
-            self.ui.text_in("Nothing here", list, 13.0, Weight::Regular, TEXT_FAINT, Align::Center);
-        }
-        let entries = b.entries.clone();
-        let mut picked: Option<(String, bool)> = None;
-        let key = format!("browse-list-{}", b.dir.display());
-        self.ui.scroll_area(&key, list, &mut |ui, area| {
-            let row_h = 40.0;
-            for (k, (name, dir, bytes)) in entries.iter().enumerate() {
-                let rr = Rect::new(area.x + 4.0, area.y + 4.0 + k as f32 * row_h, area.w - 12.0, row_h - 2.0);
-                if rr.bottom() < list.y || rr.y > list.bottom() {
-                    continue;
-                }
-                if ui.row(&format!("{key}-{k}"), rr, false) {
-                    picked = Some((name.clone(), *dir));
-                }
-                ui.icon(if *dir { "folder" } else { "inventory_2" }, Vec2::new(rr.x + 18.0, rr.center().y), 20.0, if *dir { ACCENT } else { TEXT_SOFT });
-                ui.text_in(name, Rect::new(rr.x + 40.0, rr.y, rr.w - 140.0, rr.h), 13.5, Weight::Medium, TEXT, Align::Left);
-                if !*dir {
-                    ui.text_in(&super::state::fmt_bytes(*bytes), Rect::new(rr.x, rr.y, rr.w - 12.0, rr.h), 12.0, Weight::Regular, TEXT_DIM, Align::Right);
-                }
-            }
-            8.0 + entries.len() as f32 * row_h
-        });
-        if let Some((name, dir)) = picked {
-            let p = b.dir.join(&name);
-            if dir {
-                go_to = Some(p);
-            } else {
-                chosen = Some(p);
-            }
-        }
-        if let Some(d) = go_to {
-            b.open(d);
-        }
-        if self.ui.input.keys.contains(&super::ui::Key::Escape) {
-            close = true;
-        }
-        if let Some(p) = chosen {
-            self.browser_chose(b.purpose, &p);
-            close = true;
-        }
-        if !close {
-            self.browser = Some(b);
-        }
-    }
-
-    fn browser_chose(&mut self, purpose: Purpose, p: &Path) {
+    pub(super) fn browser_chose(&mut self, purpose: Purpose, p: &Path) {
         let s = p.to_string_lossy().to_string();
         match purpose {
             Purpose::Root => {
