@@ -68,6 +68,7 @@ git switch -c generic-addon-loading
 PR 必須遵循 [`CONTRIBUTING.md`](CONTRIBUTING.md) 及 repository 的 PR template：
 
 - PR title 與 body 一律使用英文。
+- PR message 必須完整依照 [`.github/pull_request_template.md`](.github/pull_request_template.md) 的欄位與順序撰寫，不得省略或改用其他格式；未使用的欄位應明確填寫不適用原因。
 - 說明使用者可觀察到的行為、通用架構設計、測試方式與結果。
 - 維持單一變更主題，不混入無關修改。
 - 每個 PR 只保留與該次修改直接相關的 commits；不得包含其他功能、修復或規範工作的 commits。
