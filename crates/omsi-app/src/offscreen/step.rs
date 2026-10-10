@@ -680,8 +680,8 @@ impl Offscreen<'_> {
             steps::humans_by_hour(h, world, run_clock.time, settings.pax_density, duty.as_ref());
             // populate stops near every LAN player every 2 seconds, as app_events.rs
             // does every 2 s near the local player.  At startup `center` is ZERO (no
-            // player bus on a headless server), so stops on the actual map – which can
-            // be thousands of metres away – fall outside the 600 m filter in
+            // player bus on a headless server), so stops on the actual map - which can
+            // be thousands of metres away - fall outside the 600 m filter in
             // `populate_with` and are never seeded without this loop.
             if i.is_multiple_of(60) {
                 let player_centers: Vec<glam::DVec3> = remotes_off
@@ -840,7 +840,7 @@ impl Offscreen<'_> {
                 .map(|c| c.position)
                 .or(player.as_ref().filter(|_| args.cam.is_none()).map(|p| p.vehicle.position))
                 .unwrap_or(camera.position);
-            steps::throw_spray(spray, dt, player.as_ref(), traffic.as_ref(), remotes_off, eye, steps::spray_wind(weather), world, spray_wet);
+            steps::throw_spray(spray, dt, player.as_ref(), traffic.as_ref(), remotes_off, eye, steps::spray_wind(weather), world, spray_wet, crate::rain::quality());
         }
         *wetness = crate::weather_setup::road_wetness(precip_of(weather).1, dt as f64, *wetness);
     }

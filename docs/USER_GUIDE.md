@@ -53,6 +53,14 @@ Everything can also be given on the command line, which then skips both:
 | `--enhanced-plus` | Enhanced+: the physically based renderer with ray-traced shadows, ambient occlusion and reflections |
 | `--launcher` / `--menu` / `--no-menu` | open the launcher (the default without arguments), the in-game menu, or neither |
 
+**Experimental passenger animation A/B test.** In the launcher open **Settings → Gameplay →
+Passengers → Passenger animations** and choose **Procedural (experimental)** to test the
+earlier foot-planted/IK poses. **Original OMSI** is the default and remains compatible.
+For temporary A/B tests without changing the saved setting, set `OMSI_PAX_ANIMATION=enhanced`
+before starting openOMSI (or `OMSI_PAX_ANIMATION=original` to force the classic mode).
+This is a visual experiment: check boarding, seats, door steps, CPU time and mirrors before
+making it the default. The setting does not change passenger routing or tickets.
+
 Keys in the window: **W** throttle, **S** brake, **A**/**D** steering - the arrow keys do the
 same - and every vehicle key of `Inputs/keyboard.cfg` works as it does in OMSI: throttle
 Shift+Num 8, brake Shift+Num 2, steering Shift+Num 4/6, **E** battery and ignition, **M**
@@ -150,15 +158,47 @@ LAN session. Esc opens the game menu: drive the next placed vehicle, place any v
 the installation in front of the camera (or beside the bus), couple what stands close behind
 the bus and uncouple it again, save the situation or load the quicksave, the next weather, the clock an hour on or back, refuel and wash (only at a
 petrol station, as in OMSI), repair (the team needs the map's travel time when the bus stands
-in no depot yard), screenshot, timetable, skip the duty's next stop (also **Ctrl+Shift+H**: for a
-stop the bus cannot reach or never registers at), the object editor (below), quit. Its *Options* hold
-one line a setting under the launcher's headings (Simulation, Display & sound, Driving,
-Camera): **Left** and **Right** (or a click on the arrows round the value) step it down and
-up, Enter as before; they are kept for the next game. Home is the ticket desk camera and Insert the timetable view (as OMSI's keyboard.cfg binds them), and the
+in no depot yard), the photo mode (below), timetable, skip the duty's next stop (also **Ctrl+Shift+H**: for a
+stop the bus cannot reach or never registers at), the object editor (below), quit. The menu is a
+page of the launcher: its rail on the left (the menu's lines as its pages, the picture of the
+game beside it with a card of what is being driven and **Resume**), and *Options*, *Controls*,
+*Vehicle options*, *World options* and the lists open as launcher pages right of the rail - the
+tabs as the launcher's bar, the settings in two columns with its fields, switches, sliders and
+drop-downs. **Up**/**Down** and **Enter** work them as before, **Left** and **Right** step a
+value; the settings are kept for the next game. Home is the ticket desk camera and Insert the timetable view (as OMSI's keyboard.cfg binds them), and the
 change keys of keyboard.cfg hand out or take back the change. The HUD
 shows time, speed, line, next stop, delay and what the workshop just did (and why the bus
 stands: the parking brake, low air pressure, a line the date's chrono takes off), and the
 controls for the first seconds.
+
+### Photo mode
+
+*Photo mode* in the game menu (or **Ctrl+F12**, the `photo_mode` key) stops the game and hands
+over a camera of its own, as the racing games' photo modes do. **WASD** fly it (level over the
+ground whichever way it looks), **Q**/**E** (or Space) go down and up, the right mouse button
+held - or the left one over the picture - looks round (the arrows too), the wheel and **+**/**-**
+zoom the lens, **Z**/**X** roll it and **R** levels it again, **Shift** is faster and **Alt**
+slower, **Tab** steps through the panel's pages, **H** hides the panel, **Enter** (or F12) takes
+the photo and **Esc** leaves. A gamepad: the left stick moves, the right one looks, the triggers
+go down and up, the shoulder buttons roll, the d-pad zooms, A takes the photo, Y hides the
+panel, X levels, B leaves. The camera stays within a distance of the bus (25 m to unlimited)
+and above the ground; *Orbit* turns it round the bus instead.
+
+The panel has five pages. *Camera*: free or orbit, the focal length (10-400 mm, a full-frame
+camera's), the roll, the speed, the distance allowed, the frame (the window's or 16:9, 21:9,
+3:2, 4:3, 1:1, 4:5, 9:16 - the photo is cut to it) and the guides (thirds, golden ratio,
+centre). *Lens*: depth of field with the aperture (f/1.2-f/22), the focus on the bus or at a
+distance set by hand and the bokeh's shape (round, 5, 6 or 8 blades); motion blur for a
+rolling shot with the shutter speed (the bus stays sharp, the street passes - it needs the
+bus moving when the game was stopped); how many samples a photo is made of. *Colour*:
+exposure, contrast, highlights, shadows, saturation, vibrance, temperature, tint. *Effects*:
+a film look (vivid, warm, cool, vintage, sepia, black and white, noir, bleach bypass, teal and
+orange, faded film) and its strength, film grain, vignette, colour fringes, sharpening.
+*Scene*: the clock an hour or a quarter on or back, and the photo's size (the window's or
+double). Depth of field and motion blur are real: the photo is the average of many pictures,
+each taken through another point of the aperture and at another moment of the shutter, so
+what is shown sharpens over a second or two once the camera stands still (the panel shows
+how far). What is shown is the photo as it is saved - a PNG in the `Screenshots` folder.
 
 On a duty the game keeps a **journey log** in the content folder's `Journeys` (one text file
 a duty, named by the real date and time it began and the line and tour): each trip driven
@@ -171,23 +211,18 @@ nothing - what virtual bus companies ask their drivers for.
 
 The launcher is the game's own window (`crates/omsi-app/src/launcher`): `omsi` started
 without arguments (or with `--launcher`) opens it. It is drawn with wgpu - no web engine -
-on `egui_retained`, the retained-mode interface of the org's egui fork
-([egui-openomsi](https://github.com/openOMSI-org/egui-openomsi)): a tree of nodes laid out
-like CSS flexbox, drawn again only when something changed. Its look is the Development
-Tools' - a header, a sidebar, cards, a status bar, dark or light - with Material Symbols
-icons and Roboto. On a phone or in a window narrower than 760 points the sidebar gives way
-to a tab bar at the foot (Play, Online, Mods, More), with a Play screen of the bus and the
-duty as big cards, and every list choice on a sheet of its own. The Drive page shows the chosen bus in a card, as a
+flat and dark (neutral greys, one amber accent), every control custom (sliders, switches,
+dropdowns, a calendar, a time picker, text fields, segmented buttons), Material Symbols
+icons and Roboto (`crates/omsi-ui`). The Drive page shows the chosen bus in a card, as a
 picture **drawn by the game's renderer** - its model, paint, materials, reflections and
 shadows exactly as in the game, under the light of the chosen time and weather - drawn
 again only when something changes; drag on it to turn the bus, scroll to zoom. Its pages:
 
-* **Drive** - three steps: the bus (makers and types, search, favourites, liveries, depot
-  file, number plate), the day and the weather (time, date, season, traffic, passengers,
-  timetable buses, autostart, the weather presets that suit the season, custom and live
-  weather), and the map and the duty (map, line and tour - the lines that run on the chosen
-  date - the start point, picked from the map too, and the roadbook with the IBIS codes);
-  the summary and **Start the duty** at the foot.
+* **Drive** - four steps: the bus (search, liveries, depot file, number plate), the route (map, start
+  point, line and tour - the lines that run on the chosen date), time and weather (time,
+  date, season, traffic, passengers, timetable buses, autostart, *LAN play: host / join*,
+  the weather presets that suit the season), and the roadbook with the IBIS codes; the
+  summary and **Start the duty** bottom right.
 * **Profile** - hours, experience and level, from OMSI's own `.odr` personnel files plus
   the session summaries the game writes to `~/.openomsi/sessions`.
 * **Settings** - everything in `settings.cfg` below, saved as it changes; keys the page
@@ -216,7 +251,9 @@ again only when something changes; drag on it to turn the bus, scroll to zoom. I
   yet has **Set up**, and **Set up step by step** finds its axes (turn the wheel left, press
   each pedal); every button of the device is listed (press one to jump to it). On Windows the
   devices are read through DirectInput, as OMSI does, so wheels Windows lists can be
-  configured for steering. Force feedback needs a driver that supports constant force:
+  configured for steering. Logitech wheels push the other way from DirectInput's force, so the game
+  turns their force round by itself (leave *Invert force feedback* off unless one still feels wrong).
+  Force feedback needs a driver that supports constant force:
   parking resistance eases as the bus rolls, with centring and
   feedback from the bus's sideways acceleration, short bumps when the front wheels cross
   an edge, plus the scripts' shaking, `FF_Vib_Amp`. Over the top of that the wheel keeps up
@@ -442,6 +479,13 @@ OMSI, and the puddles' spray on top. Spray is thrown
 within 100 m of the camera (less of it farther off), at most 1400 puffs at once; none shows
 inside the bus the camera is in.
 
+Rain costs frames, so Graphics → *Rain quality* (`rain_quality`) sets how much of it is drawn:
+**High** (the default) paints the drops on the glass 30 times a second, lets every vehicle
+throw spray and fills the air with the full curtain of falling streaks; **Medium** paints the
+glass 15 times a second, keeps only your own bus's spray and draws half the streaks; **Low**
+shows OMSI 2's own texture rain on the glass instead of the drops (from the next bus loaded),
+throws no spray and draws a quarter of the streaks.
+
 The vanilla look stays the default. The navigator (`crates/omsi-app/src/navigator.rs`) sits in a corner of the screen (lower
 left by default), after the Route Advisor of Euro Truck Simulator 2: small, dark and half
 transparent, a tilted 3D map that turns with the bus and zooms out with speed - the roads
@@ -524,14 +568,6 @@ content volume and moved into place in one step, and it can be cancelled and cle
 any point. A repaint for a bus that is not installed is kept aside and installed when the
 bus arrives.
 
-The Mods page lists **every mod of the content folder** - each install the launcher made
-(noted in `Mods/.mods.json` with the folders it made, or the archive it is read from), and
-what lies there without a note, one entry per bus, map, other folder and archive - with a
-search and filters (buses, maps, archives, other, switched off). Each one can be **switched
-off** - its folders move to `Mods/disabled/<name>`, out of the game's and the lists' sight,
-and back again when it is switched on - or **deleted**, after a question. A mod that only
-added files to a folder another mod made goes with that folder's entry.
-
 Archives can also be **used in place**: a `.zip` laid out like OMSI 2 is put into the
 content folder's `Archives/` (hard-linked when it is on the same disk, moved from the
 `Mods/` inbox, else copied after a free-space check) and read by the game without
@@ -579,43 +615,6 @@ before (the model starts three days back), with the season's and the latitude's 
 It sets everything a weather sets - visibility, wind, temperature, rain or snow, the wet
 road - for every graphics mode; Enhanced and Enhanced+ also take its cloud amounts and its
 air. `OMSI_DAY_AIR=haze,angstrom[,height,strat]` fixes the air for comparisons.
-
-## Ambience
-
-On top of the sounds OMSI 2 plays itself (each bus's own sound configuration, the traffic's,
-the scenery's, the rain in the street), openOMSI adds an ambience of its own: Settings →
-Sound → *Ambience* switches it on or off (`ambient=1`, on by default) and *Ambience volume*
-sets how loud it is (`vol_ambient`, 0..1, 0.8 by default), on top of the master volume.
-It is synthesised while you play from what the game knows of the moment, so it follows the
-weather, the time and the road continuously and never loops:
-
-- **Wind and gusts** from the weather's wind: weaker between houses than over open land,
-  roaring in gusts in a storm; overhead wires sing in a strong wind in town; inside a moving
-  bus the air rushing past its doors and windows.
-- **Leaves** rustling in the trees around you, from a few leaves in a breeze to a roar in a
-  gale; green in summer, crisp and dry in autumn, nothing on bare winter trees.
-- **Rain drops** near you: on the ground and in the puddles in the street, on the glass by
-  your ear in the bus, and on the roof for a bus whose own sounds have no rain on its roof -
-  sparse in a drizzle, dense in a downpour. Thunder rolls in a thunderstorm, near strikes
-  cracking, far ones rumbling.
-- **Birds** by day (most at dawn in spring, little in winter, quiet in rain and wind),
-  **crickets** on warm summer nights (chirping faster the warmer it is) and the **far hum of
-  the town's traffic**, busier in the rush hours than at night.
-- **The tyres on the road**: what the surface under each wheel of your bus sounds like at
-  the speed it rolls - asphalt, concrete slabs (a knock at every joint), cobblestones (a knock
-  a stone), gravel (crunching, a stone now and then against the wheel arch), dirt and mud,
-  grass, snow (squeaking in hard frost; a road the weather has covered in snow crunches as snow),
-  the hiss of a wet road and the swash of the puddles.
-  The surface is the one OMSI 2 itself knows for the scripts (the `[surface]` of the road's or
-  the ground's texture, `Axle_SurfaceID_` - which your bus's scripts now read too); a texture
-  without one is told by its name, and an unknown one is asphalt.
-
-Everything outside is heard through the bus's bodywork when you sit in it - quieter and
-duller, opening up as the doors or the driver's window open - and echoes in a tunnel. What a
-bus or the map already plays is not doubled: a bus with its own rain on the roof, wet-road
-hiss or rolling noise keeps those, and the street's rain stays OMSI's `rain_outside.wav`.
-The bird recordings are free (CC0 / public domain, see `assets/sounds/ambient/CREDITS.md`);
-everything else is synthesised.
 
 ## Radio
 

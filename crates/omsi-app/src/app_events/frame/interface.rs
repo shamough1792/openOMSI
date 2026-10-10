@@ -25,6 +25,14 @@ impl App {
         if !(self.world.is_some() && self.renderer.is_some() && self.scene.is_some()) {
             return vr_nav_display;
         }
+        // the photo mode: the photo and its panel, none of the game's interface
+        if self.photo.is_some() {
+            if let Some(scene) = self.scene.as_mut() {
+                scene.overlays.clear();
+            }
+            self.frame_navigator(dt, [0.0, 0.0, 1.0, 1.0], vr_active, true, vr_nav_display);
+            return vr_nav_display;
+        }
         let (notes, tooltip) = self.frame_notes(dt, mirror_help);
         let __t = Instant::now();
         // (the frame's overlays start empty; the notes are the interface's, in
@@ -58,6 +66,8 @@ impl App {
             }
         }
         self.frame_ui_draw(dt, hud, vr_active, plugin_focus, &notes, tooltip, menu_lines, menu_tabs);
+        // the pause menu, drawn with the launcher's toolkit over all of it
+        self.frame_shell(dt);
         *self.perf.profile.entry("hud").or_default() += __t.elapsed().as_secs_f64();
         vr_nav_display
     }
@@ -85,7 +95,7 @@ impl App {
         // the mirror editor's keys and the panel under the cursor, while it is on
         lines.extend(mirror_help);
         if self.menus.editor.is_some() {
-            lines.push("Object editor: click picks · drag moves · wheel turns (Shift lifts) · Del · C copy · V variant · Backspace undo · Ctrl+S save · Esc".into());
+            lines.push("Object editor: click picks | drag moves | wheel turns (Shift lifts) | Del | C copy | V variant | Backspace undo | Ctrl+S save | Esc".into());
         }
         if let Some(d) = self.session.duty.as_ref().filter(|d| d.trip_done()) {
             lines.push(match d.trips.get(d.trip_index + 1) {
@@ -300,6 +310,8 @@ impl App {
     ) {
         // (the steering cross: before the renderer and the scene are borrowed)
         let steer_cross = self.steer_cross_point();
+        // (the pause menu is the launcher toolkit's, `frame_shell`, unless a headset shows it)
+        let shell_menu = self.shell_takes_mouse();
         let (Some(r), Some(scene)) = (self.renderer.as_ref(), self.scene.as_mut()) else { return };
         if let (Some(ui), Some(s)) = (self.ui.as_mut(), self.gfx.surface.as_ref()) {
             let scale = self.window.as_ref().map(|w| w.scale_factor() as f32).unwrap_or(1.0);
@@ -395,6 +407,7 @@ impl App {
                 fps: self.settings.show_fps.then_some(self.perf.fps),
                 paused: self.paused,
                 menu: match chooser_sel {
+                    _ if shell_menu => None,
                     Some(k) => Some((k, &chooser_items[..])),
                     None => self.menus.game_menu.map(|k| (k, &menu_lines[..])),
                 },

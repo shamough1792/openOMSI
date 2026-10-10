@@ -5,7 +5,6 @@
 use super::*;
 use crate::view_sync::{self, ViewSync};
 
-mod ambient;
 mod controls;
 mod driving;
 mod integrations;
@@ -34,6 +33,8 @@ impl App {
         // session ends)
         let Some(time) = self.frame_timing(event_loop) else { return };
         let dt = time.dt;
+        // what the pause menu's clicks of the last frame asked for
+        self.apply_shell_actions(event_loop);
         // a vehicle chosen in the menu, read on a worker meanwhile, put down once it is ready
         self.poll_vehicle_placement();
         // the start menu, and the map's first area still loading
@@ -60,10 +61,15 @@ impl App {
         self.frame_view_keys(dt);
         let daylight = self.frame_weather(dt);
         self.frame_lights(dt, daylight);
-        self.frame_ambient(dt, &daylight);
         self.frame_scripted(dt, daylight);
+        if let (Some(w), Some(p)) = (self.world.as_deref(), self.player.as_mut()) {
+            crate::wheel_surface::tell_scripts(w, &mut p.vehicle);
+        }
+        // the photo mode's camera and panel
+        self.frame_photo(time.raw_dt);
         let vr_nav_display = self.frame_ui(dt);
         let lighting = self.frame_lighting(dt, daylight);
+        self.trace_look("frame", self.input.cursor.0, self.input.cursor.1);
         self.frame_render(event_loop, &time, &lighting, vr_nav_display);
     }
 }

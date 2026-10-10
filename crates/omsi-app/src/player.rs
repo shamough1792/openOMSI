@@ -1778,6 +1778,46 @@ impl Player {
         Some(self.nearest_hits(origin, dir).0).filter(|t| t.is_finite())
     }
 
+    /// Whether a mesh of the vehicle is glass / transparent (windows, windshield).
+    pub(crate) fn is_mesh_glass(&self, trailer: Option<usize>, i: usize) -> bool {
+        let (ty, def_idx) = match trailer {
+            None => (&self.vehicle.ty, self.vehicle.ty.meshes[i].def_index),
+            Some(ti) => (&self.vehicle.trailers[ti].ty, self.vehicle.trailers[ti].ty.meshes[i].def_index),
+        };
+        let def = &ty.model.meshes[def_idx];
+        let file_low = def.file.to_ascii_lowercase();
+        if file_low.contains("glas") || file_low.contains("scheibe") || file_low.contains("window") || file_low.contains("fenster") {
+            return true;
+        }
+        def.materials.iter().any(|m| m.alpha == 2)
+    }
+
+    /// How far along a ray the nearest opaque (non-glass) body part of the vehicle is.
+    pub(crate) fn opaque_body_hit(&self, origin: DVec3, dir: Vec3) -> Option<f32> {
+        let mut nearest = f32::INFINITY;
+        let o = (origin - self.vehicle.position).as_vec3();
+        for (i, mesh) in self.vehicle.ty.meshes.iter().enumerate() {
+            if !self.vehicle.mesh_props[i].visible || self.is_mesh_glass(None, i) { continue; }
+            let transform = self.vehicle.mesh_local_transform(i);
+            if !ray_may_hit(&self.vehicle.ty, i, &transform, o, dir, 0.0) { continue; }
+            if let Some(t) = omsi_geometry::ray_mesh(o, dir, &mesh.data, &transform) {
+                if t > 0.02 && t < nearest { nearest = t; }
+            }
+        }
+        for (ti, trailer) in self.vehicle.trailers.iter().enumerate() {
+            let o = (origin - trailer.position).as_vec3();
+            for (i, mesh) in trailer.ty.meshes.iter().enumerate() {
+                if !trailer.mesh_props[i].visible || self.is_mesh_glass(Some(ti), i) { continue; }
+                let transform = trailer.mesh_local_transform(i);
+                if !ray_may_hit(&trailer.ty, i, &transform, o, dir, 0.0) { continue; }
+                if let Some(t) = omsi_geometry::ray_mesh(o, dir, &mesh.data, &transform) {
+                    if t > 0.02 && t < nearest { nearest = t; }
+                }
+            }
+        }
+        (nearest.is_finite()).then_some(nearest)
+    }
+
     /// Seen from outside: the body of the bus (a wall, a window) is hit before the control
     /// mesh `i` (of coupled part `trailer`, or of the bus itself), so it cannot be reached.
     fn control_hidden(&self, origin: DVec3, dir: Vec3, trailer: Option<usize>, i: usize) -> bool {
@@ -2749,7 +2789,7 @@ pub(crate) fn pick_in(vehicle: &omsi_sim::VehicleInstance, origin: DVec3, dir: V
     for dirs in &rings {
         // Collect every hit in this ring, then among surfaces within a depth band of the
         // nearest prefer the mesh whose centre the ray aims at. Aachen ibox D10/D11/D12 are
-        // tilted, overlap by ~6 mm, and sit ~16 mm apart along Z — a 2 mm depth-only pick
+        // tilted, overlap by ~6 mm, and sit ~16 mm apart along Z - a 2 mm depth-only pick
         // let backspace (D10) steal digit 0 (D11) whenever both boxes were hit.
         let mut hits: Vec<(f32, f32, usize)> = Vec::new();
         for (i, xf, tris) in &candidates {
