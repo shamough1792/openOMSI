@@ -165,7 +165,7 @@ impl App {
             "options" => self.open_list(crate::game_lists::ListKind::Options(0)),
             "controls" => self.open_list(crate::game_lists::ListKind::Controls),
             "camera" => {
-                let tab = crate::game_lists::options_tab(self, "Camera");
+                let tab = crate::game_lists::tab_of(self, crate::game_lists::ListKind::Options(0), "Camera");
                 self.open_list(crate::game_lists::ListKind::Options(tab));
             }
             "vehicle" => self.open_list(crate::game_lists::ListKind::Vehicle(0)),
@@ -303,6 +303,10 @@ impl App {
                     self.service_msg = Some(("Click a street on the map: the bus is put there".into(), 6.0));
                 }
             }
+            // (the game's own panels, by name for the plugins and the input script)
+            "view_editor" => crate::game_panels::view_editor::open(self),
+            "dest_form" => crate::game_panels::open_dest_form(self),
+            "quick_menu" => crate::game_panels::quick_menu::toggle(self),
             "driver" => self.open_list(crate::game_lists::ListKind::Drivers),
             "number" => self.open_list(crate::game_lists::ListKind::Numbers),
             "dest" => self.open_list(crate::game_lists::ListKind::Destinations),
@@ -429,7 +433,7 @@ impl crate::App {
             self.service_msg = Some(("No server code: not in a LAN session or on a server".into(), 3.0));
             return;
         };
-        #[cfg(not(target_os = "android"))]
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         {
             thread_local! {
                 // (kept alive: on X11 the text is gone when the clipboard is dropped)
@@ -442,6 +446,11 @@ impl crate::App {
                 }
                 c.as_mut().is_some_and(|cb| cb.set_text(code.clone()).is_ok())
             });
+            self.service_msg = Some(if ok { ("Server code copied".into(), 3.0) } else { (format!("{}: {code}", omsi_ui::tr("Server code")), 8.0) });
+        }
+        #[cfg(target_os = "ios")]
+        {
+            let ok = crate::apple::set_clipboard(&code);
             self.service_msg = Some(if ok { ("Server code copied".into(), 3.0) } else { (format!("{}: {code}", omsi_ui::tr("Server code")), 8.0) });
         }
         #[cfg(target_os = "android")]
