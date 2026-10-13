@@ -1,6 +1,6 @@
 // What the Settings page shows: per tab its two columns, per column its rows, in the order
-// the game's own launcher had them. The English labels are the translation keys, so they
-// stay word for word as they were.
+// the game's own launcher window had them (it is gone). The English labels are the
+// translation keys, so they stay word for word as they were.
 //
 // A row is one of:
 //   { type: 'select', key, label, options, raw?, help? }   options: [value, label] pairs, or (s, boot) => pairs
@@ -123,7 +123,8 @@ const graphics = {
         { type: 'select', key: 'max_obj_dist', label: 'Object distance', options: [['auto', 'Automatic'], ['500', '500 m'], ['750', '750 m'], ['900', '900 m'], ['1500', '1500 m'], ['3000', '3000 m']] },
         { type: 'select', key: 'min_obj_size', label: 'Small objects', options: [['0.005', 'All'], ['0.013', 'Normal'], ['0.02', 'Fewer (faster)'], ['0.03', 'Few (fastest)']] },
         { type: 'select', key: 'mirror_size', label: 'Mirrors', options: [['0', 'Off'], ['128', 'Low (128)'], ['256', 'Normal (256)'], ['512', 'High (512)'], ['1024', 'Very high (1024)']] },
-        { type: 'select', key: 'mirror_refresh', label: 'Real-time reflections', options: [['off', 'None (frozen picture)'], ['eco', 'Economical'], ['full', 'Full']] },
+        { type: 'select', key: 'mirror_refresh', label: 'Real-time reflections', options: [['off', 'None (frozen picture)'], ['eco', 'Economical'], ['full', 'Full'], ['every', 'Every frame (smoothest)']] },
+        { type: 'select', key: 'mirror_quality', label: 'Mirror quality', options: [['standard', 'Standard'], ['enhanced', 'As the picture (Enhanced)']] },
         { type: 'toggle', key: 'mirror_hud_every_frame', label: 'Mirror panels every frame' },
         { type: 'select', key: 'texture_memory', label: 'Texture memory', options: textureMemory },
         { type: 'toggle', key: 'texture_compression', label: 'Compress textures on loading' },
@@ -165,31 +166,33 @@ const driving = {
     {
       title: 'Game controllers',
       rows: [
-        { type: 'toggle', key: 'momentary_gears', label: 'H-pattern shifter: return to neutral when the gear is released' },
+        { type: 'button', label: 'Set up a wheel or pedals', icon: 'gamepad', controls: 1 },
+        { type: 'section', title: 'Wheel and pedals' },
         // the wheel's own rotation, and how much of it is the bus's full lock (a real bus:
         // about two and a half turns)
         { type: 'slider', key: 'wheel_range', label: 'Wheel rotation', min: 180, max: 1800, step: 30, def: 900, format: deg, store: round },
         { type: 'slider', key: 'wheel_lock', label: 'Full lock at', min: 0, max: 1800, step: 30, def: 0, format: (v) => (v < 45 ? t('OMSI') : deg(v)), store: (v) => (v < 45 ? 0 : Math.round(v)) },
-        { type: 'slider', key: 'pad_steer_smooth', label: 'Stick steering smoothing', min: 0, max: 300, step: 10, def: 120, format: offMs, store: round },
-        { type: 'slider', key: 'pad_steer_speed', label: 'Stick steering speed', min: 0.8, max: 5, step: 0.1, def: 2, format: (v) => `${v.toFixed(1)} s`, store: r1 },
-        { type: 'slider', key: 'pad_deadzone', label: 'Stick dead zone', min: 0, max: 0.4, step: 0.01, def: 0.08, format: (v) => `${(v * 100).toFixed(0)} %`, store: r2 },
-        { type: 'toggle', key: 'pad_steer_linear', label: 'Stick steers like a wheel (a wheel seen as a gamepad)' },
-        { type: 'select', key: 'pad_type', label: 'Gamepad type', options: [['auto', 'Automatic'], ['xbox', 'Xbox'], ['ps4', 'PlayStation 4'], ['ps5', 'PlayStation 5']] },
-        { type: 'toggle', key: 'pad_buttons', label: 'Default gamepad buttons (indicators, doors, views, gears, menu, pause)' },
-        { type: 'toggle', key: 'arrows_switch_cams', label: 'Arrow keys switch the cameras with a wheel too (no glance)' },
         { type: 'slider', key: 'pedal_throttle', label: 'Throttle pedal strength', min: 0.5, max: 2, step: 0.05, def: 1, format: pedal, store: r2 },
         { type: 'slider', key: 'pedal_brake', label: 'Brake pedal strength', min: 0.5, max: 2, step: 0.05, def: 1, format: pedal, store: r2 },
+        { type: 'toggle', key: 'momentary_gears', label: 'H-pattern shifter: return to neutral when the gear is released' },
+        { type: 'toggle', key: 'arrows_switch_cams', label: 'Arrow keys switch the cameras with a wheel too (no glance)' },
+        { type: 'section', title: 'Gamepad' },
+        { type: 'select', key: 'pad_type', label: 'Gamepad type', options: [['auto', 'Automatic'], ['xbox', 'Xbox'], ['ps4', 'PlayStation 4'], ['ps5', 'PlayStation 5']] },
+        { type: 'toggle', key: 'pad_buttons', label: 'Default gamepad buttons (indicators, doors, views, gears, menu, pause)' },
+        { type: 'slider', key: 'pad_steer_speed', label: 'Stick steering speed', min: 0.8, max: 5, step: 0.1, def: 2, format: (v) => `${v.toFixed(1)} s`, store: r1 },
+        { type: 'slider', key: 'pad_steer_smooth', label: 'Stick steering smoothing', min: 0, max: 300, step: 10, def: 120, format: offMs, store: round },
+        { type: 'slider', key: 'pad_deadzone', label: 'Stick dead zone', min: 0, max: 0.4, step: 0.01, def: 0.08, format: (v) => `${(v * 100).toFixed(0)} %`, store: r2 },
+        { type: 'toggle', key: 'pad_steer_linear', label: 'Stick steers like a wheel (a wheel seen as a gamepad)' },
+        { type: 'section', title: 'Force feedback' },
         { type: 'toggle', key: 'ff_enabled', label: 'Force feedback and vibration' },
         { type: 'toggle', key: 'ff_invert', label: 'Invert force feedback by default' },
         { type: 'note', text: 'Wheels with a saved direction use their own setting under Controls → Game controllers.' },
-        { type: 'toggle', key: 'ff_invert', label: 'Invert force feedback' },
         // what the wheel feels all the time: the road's grain, the engine's buzz, and how
         // long a jolt eases away
         { type: 'slider', key: 'ff_road_vib', label: 'Road texture vibration', min: 0, max: 4, step: 0.05, def: 1, format: vibration, store: (v) => Math.round(v * 20) / 20 },
         { type: 'slider', key: 'ff_engine_vib', label: 'Engine vibration', min: 0, max: 4, step: 0.05, def: 1, format: vibration, store: (v) => Math.round(v * 20) / 20 },
         { type: 'slider', key: 'ff_fade', label: 'Vibration fade-out', min: 0, max: 1.5, step: 0.05, def: 0.28, format: (v) => (v < 0.01 ? t('Off') : `${Math.round(v * 1000)} ms`), store: r2 },
         { type: 'button', label: 'Reset wheel settings', icon: 'refresh', patch: () => ({ wheel_range: 900, wheel_lock: 0, ff_invert: false, ff_enabled: true, ff_road_vib: 1, ff_engine_vib: 1, ff_fade: 0.28 }) },
-        { type: 'button', label: 'Set up a wheel or pedals', icon: 'gamepad', controls: 1 },
       ],
     },
   ],
@@ -304,8 +307,7 @@ const sound = {
       title: 'Radio stations',
       rows: [
         { type: 'note', text: "A radio's station button n plays the n-th station, a cassette player the first; Shift+R steps through them. An address is an MP3, AAC or Ogg stream or an .m3u/.pls playlist." },
-        // (the launcher has no command for radio.cfg yet)
-        { type: 'note', text: 'The stations cannot be edited here yet.' },
+        { type: 'custom', id: 'radio' },
       ],
     },
   ],
@@ -320,7 +322,9 @@ const gameplay = {
       rows: [
         { type: 'select', key: 'boarding', label: 'Boarding', options: [['auto', 'Pay and take the ticket'], ['pay', 'The driver sells the ticket'], ['walk', 'Just walk in']] },
         { type: 'select', key: 'standing_chance', label: 'Standing passengers', options: [['0', 'Never'], ['5', '5%'], ['10', '10%'], ['25', '25%'], ['50', '50%'], ['100', 'Always']] },
-        { type: 'select', key: 'passenger_animation', label: 'Passenger animations', options: [['original', 'Original OMSI'], ['enhanced', 'Procedural (experimental)']] },
+        { type: 'select', key: 'passenger_animation', label: 'Passenger animations', options: [['enhanced', 'Natural (procedural)'], ['original', 'Original OMSI']] },
+        // (drawn on this computer only; the avatars are downloaded once, about 310 MB)
+        { type: 'select', key: 'character_models', label: 'Character models', options: [['original', 'Original'], ['improved', 'High quality (improved)']], help: 'High quality draws the people with the Microsoft Rocketbox avatars and their living faces, on this computer only: servers and other players keep their own. They are downloaded once (about 310 MB).' },
         { type: 'toggle', key: 'exact_fare', label: 'Passengers pay the exact fare' },
         { type: 'slider', key: 'pax_density', label: 'How many passengers', min: 0, max: 2, step: 0.1, def: 1, format: pct, store: r2 },
         { type: 'toggle', key: 'get_up', label: 'Ability to get up (Ctrl+Shift+G)' },
@@ -374,11 +378,13 @@ const general = {
         { type: 'slider', key: 'ui_opacity', label: 'Interface opacity', min: 0.2, max: 1, step: 0.05, def: 0.85, format: pct, store: r2 },
         { type: 'toggle', key: 'tooltips', label: 'Name of the button under the mouse' },
         { type: 'toggle', key: 'show_fps', label: 'Frame rate in the corner' },
+        { type: 'select', key: 'perf_overlay', label: 'Performance details', options: [['off', 'Off'], ['compact', 'Compact'], ['detailed', 'Detailed']] },
         { type: 'toggle', key: 'notes', label: 'Notes in the top-left corner' },
         { type: 'toggle', key: 'chat', label: 'Chat in online games' },
         // (on top of the interface's size; Ctrl + the wheel over it in the game)
         { type: 'slider', key: 'chat_size', label: 'Chat size', min: 0.5, max: 3, step: 0.1, def: 1, format: pct, store: r1 },
         { type: 'toggle', key: 'name_tags', label: "Other players' names above their buses" },
+        { type: 'select', key: 'photo_mode', label: 'Photo mode', options: [['simple', 'Simple'], ['advanced', 'Advanced (for photographers)']], help: 'Simple: the lens, the look and the frame. Advanced: a camera body - sensor size, P/A/S/M exposure with ISO and metering, white balance in kelvin, tilt-shift, histogram, focus peaking, bracketing and 16-bit PNG.' },
         { type: 'section', title: 'Navigator' },
         { type: 'toggle', key: 'navigator', label: 'Navigator (Shift+N: map, schedule, off)' },
         { type: 'toggle', key: 'nav_arrows', label: 'Route arrows (as in OMSI 2)' },
@@ -410,5 +416,5 @@ export const SETTINGS_TABS = [graphics, driving, camera, sound, gameplay, genera
 /** The settings a saved graphics profile holds (`GRAPHICS_PROFILE_KEYS`). */
 export const GRAPHICS_PROFILE_KEYS = [
   'graphics', 'msaa', 'render_scale', 'anisotropy', 'shadow_size', 'ssao', 'shadows', 'shadow_casters', 'detail_textures', 'led_glow', 'led_mips', 'reflections', 'clouds', 'cloud_quality', 'rain_quality', 'windy_trees',
-  'vsync', 'max_fps', 'view_distance', 'max_obj_dist', 'min_obj_size', 'mirror_size', 'mirror_refresh', 'mirror_hud_every_frame', 'texture_memory', 'texture_compression',
+  'vsync', 'max_fps', 'view_distance', 'max_obj_dist', 'min_obj_size', 'mirror_size', 'mirror_refresh', 'mirror_quality', 'mirror_hud_every_frame', 'texture_memory', 'texture_compression',
 ];

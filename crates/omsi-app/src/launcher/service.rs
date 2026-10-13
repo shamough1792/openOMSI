@@ -22,7 +22,7 @@ use std::time::Instant;
 type Out = Arc<Mutex<Box<dyn Write + Send>>>;
 
 /// Where an answer goes: the request's `id`, what it says, the bytes after it.
-type Reply = Arc<dyn Fn(&Value, Value, &[u8]) + Send + Sync>;
+pub(super) type Reply = Arc<dyn Fn(&Value, Value, &[u8]) + Send + Sync>;
 
 /// The answers' channel: stdout as the program got it, while anything else printing to
 /// stdout from here on (a stray `println!` deep in the game) goes to stderr instead and
@@ -54,7 +54,6 @@ fn write(out: &Out, id: &Value, mut head: Value, body: &[u8]) {
 /// `openomsi --launcher-service`: requests on stdin, answers on stdout.
 pub fn run() -> anyhow::Result<()> {
     super::install();
-    crate::launcher_statics();
     let out: Out = Arc::new(Mutex::new(answers()));
     let reply: Reply = Arc::new(move |id, head, body| write(&out, id, head, body));
     let (tx, rx) = std::sync::mpsc::channel::<Value>();
@@ -119,6 +118,7 @@ fn serve(rx: std::sync::mpsc::Receiver<Value>, reply: Reply) {
     let send = |id: &Value, head: Value, body: &[u8]| reply(id, head, body);
     let mut renderer: Option<Renderer> = None;
     let mut showroom = Showroom::new();
+    let pads = super::pads::Pads::start();
     let mut last = Instant::now();
     while let Ok(req) = rx.recv() {
         let id = req.get("id").cloned().unwrap_or(Value::Null);
@@ -191,9 +191,14 @@ fn serve(rx: std::sync::mpsc::Receiver<Value>, reply: Reply) {
                 let (map, date, trip) = (s("map"), s("date"), s("trip"));
                 std::thread::spawn(move || {
                     let global = omsi_cfg::find_in_roots(&map).map(|(_, p)| p).or_else(|| omsi_launcher_lib::content_path(&map).ok()).unwrap_or_else(|| PathBuf::from(&map));
-                    let v = omsi_launcher_ui::mapview::export(&map, &global, &date, &trip, 0.6);
+                    let v = omsi_launcher_model::mapview::export(&map, &global, &date, &trip, 0.6);
                     out(&id, json!({ "ok": true }), v.to_string().as_bytes());
                 });
+            }
+            "pads" => pads.ask(req, reply.clone()),
+            "key_actions" => {
+                let out = reply.clone();
+                std::thread::spawn(move || out(&id, json!({ "ok": true }), super::key_actions::key_actions(&req).to_string().as_bytes()));
             }
             "quit" => break,
             other => send(&id, json!({ "ok": false, "error": format!("unknown command {other}") }), &[]),
