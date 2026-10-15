@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https:; connect-src 'self' https://api.github.com https://openomsi.savvabestbrother.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>openOMSI</title>
 <meta name="description" content="openOMSI: OMSI 2 recreated from scratch in Rust, fully compatible with every map and mod.">
@@ -13,11 +14,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1f2227" media="(prefers-color-scheme: dark)">
-<script>
-  // the theme picked with the button in the app bar (light / dark), before the page is drawn;
-  // nothing stored = follow the system
-  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
-</script>
+<script src="theme.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -38,6 +35,7 @@
   <div class="drawer-section">
     <a href="#/" data-route="/"><span class="material-icons">home</span>Overview</a>
     <a href="#/download" data-route="/download"><span class="material-icons">download</span>Download</a>
+    <a href="#/beta" data-route="/beta"><span class="material-icons">science</span>Betas</a>
   </div>
   <div class="drawer-subheader">Documentation</div>
   <div class="drawer-section" id="doc-links"></div>
@@ -68,7 +66,7 @@
   <div id="view"></div>
   <footer class="footer">
     openOMSI is an independent project, not affiliated with the makers of OMSI 2.
-    OMSI&nbsp;2 is required to play. · <a href="https://github.com/openOMSI-org/openOMSI/blob/main/LICENSE">MIT License</a>
+    OMSI&nbsp;2 is required to play. · <a href="https://github.com/openOMSI-org/openOMSI/blob/main/LICENSE">GNU AGPL v3</a>
   </footer>
 </main>
 
@@ -107,7 +105,7 @@
     <div class="grid">
       <div class="card elevation-1"><span class="material-icons card-icon">extension</span><h3>100% mod compatibility</h3><p>Maps, buses, AI vehicles, scenery and plugins from the community work as they are - no conversion.</p></div>
       <div class="card elevation-1"><span class="material-icons card-icon">speed</span><h3>A modern engine</h3><p>64-bit, no 2&nbsp;GB limit, tile streaming and texture loading on worker threads, Metal / Vulkan / DirectX&nbsp;12.</p></div>
-      <div class="card elevation-1"><span class="material-icons card-icon">devices</span><h3>Windows, macOS, Linux, Android</h3><p>Native builds for every platform, released automatically for every change.</p></div>
+      <div class="card elevation-1"><span class="material-icons card-icon">devices</span><h3>Windows, macOS, Linux, Android</h3><p>Native builds for every platform, with betas for testers and tested stable releases.</p></div>
       <div class="card elevation-1"><span class="material-icons card-icon">smartphone</span><h3>On your phone</h3><p>The full game on Android: on-screen wheel or tilt steering, analog pedals, doors, gearbox and a cab panel - with the same maps, buses and mods. <a href="#/docs/ANDROID">More</a></p></div>
       <div class="card elevation-1"><span class="material-icons card-icon">texture</span><h3>PBR materials</h3><p>Normal, roughness, metalness and occlusion maps beside a texture give mods modern materials, and still work in OMSI&nbsp;2. <a href="#/docs/PBR">More</a></p></div>
       <div class="card elevation-1"><span class="material-icons card-icon">handyman</span><h3>No limits for modders</h3><p>Textures up to 16K, any number of interior lights per mesh, no 2&nbsp;GB limit - and OMSI&nbsp;2 content still works as it is. <a href="#/docs/MODDING">More</a></p></div>
@@ -122,9 +120,10 @@
 <template id="download">
   <div class="content">
     <h1>Download</h1>
+    <p class="lead" id="dl-channel">The stable release is recommended for everyday use. To try upcoming changes, visit <a href="#/beta">Beta downloads</a>.</p>
     <div class="card card-warning elevation-2">
       <span class="material-icons card-icon">construction</span>
-      <div><h3>Early release: expect bugs</h3><p>openOMSI is in an early stage of development. Things may be missing or broken, and may change between versions. Please report problems on the <a href="#/issues">Issues</a> page.</p></div>
+      <div><h3 id="dl-warning-title">Early release: expect bugs</h3><p id="dl-warning-text">openOMSI is in an early stage of development. Things may be missing or broken, and may change between versions. Please report problems on the <a href="#/issues">Issues</a> page.</p></div>
     </div>
     <div class="card card-warning elevation-2">
       <span class="material-icons card-icon">warning</span>
@@ -141,11 +140,11 @@
       <li><b>Dedicated server:</b> only for hosting a multiplayer session without playing on that machine - to play, take the game above. See <a href="#/docs/SERVER">Dedicated server</a>.</li>
       <li>Mods go into the folder next to the game, or through the launcher's <b>Mods</b> page. The original OMSI&nbsp;2 folder is never changed.</li>
     </ul>
-    <p>All versions: <a href="#/releases">Releases</a>. Versions are numbered <code>MAJOR.MINOR.COMMIT</code> - see <a href="#/docs/VERSIONING">Versioning</a>.</p>
+    <p>All versions: <a href="#/releases">Releases</a>. Versions are numbered <code>MAJOR.MINOR.PATCH</code> - see <a href="#/docs/VERSIONING">Versioning</a>.</p>
   </div>
 </template>
 
-<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin="anonymous"></script>
 <script src="app.js"></script>
 </body>
 </html>

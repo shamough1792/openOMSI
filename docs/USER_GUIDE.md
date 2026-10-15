@@ -88,7 +88,8 @@ is the same thing for an offscreen run.
 
 **Updates.** (Not yet in the desktop launcher and the Android page: offering and installing an
 update was the game's old launcher window's, which is gone, and their update page is still to
-come - until then a new release is downloaded from the releases page. During a session the game
+come - until then a new release is downloaded from the
+[latest release](https://github.com/openOMSI-org/openOMSI/releases/latest) page. During a session the game
 still downloads a newer release and says so, as below.) When the launcher starts it asks
 [github.com/openOMSI-org/openOMSI](https://github.com/openOMSI-org/openOMSI) for the latest release
 and, when there is a newer one, offers it: **Update now** downloads it (checked against the
@@ -97,7 +98,8 @@ again - on Windows `openomsi.exe` and `openomsi-launcher.exe`, on macOS the `ope
 you started, on Linux the program files; mods, content and settings stay. On Android the
 system's installer asks "Do you want to update this app?"; Update replaces openOMSI and starts
 it again, Cancel leaves it as it was. Settings → General → Updates: look for updates at the start (on
-by default), install without asking (off by default), Check now. A folder openOMSI cannot
+by default), install without asking (off by default), the update channel (Stable, the tested
+releases, by default; Beta, every new version before it is tested, for testers), Check now. A folder openOMSI cannot
 write to (Program Files, an app opened straight from Downloads on macOS) is reported with
 what to do. A download that breaks goes on where it stopped (up to four times), a request
 that times out is tried again after 3 and 10 s, and when the GitHub API does not answer (or
@@ -250,7 +252,16 @@ nothing - what virtual bus companies ask their drivers for.
 The launcher is a program of its own beside the game, `openomsi-launcher-app` (a Tauri window,
 `launcher/`, see its README): `openomsi` started without arguments opens it, and where it is
 missing - or its window cannot open, for want of WebView2 on an old Windows (the game offers
-Microsoft's installer) or of WebKitGTK 4.1 on Linux - the game says so and where it belongs.
+Microsoft's installer) or of WebKitGTK 4.1 on Linux - the game says so and where it belongs
+(on Linux in a dialog of the desktop as well as in the terminal).
+
+**Linux needs WebKitGTK 4.1** for the launcher's window: `libwebkit2gtk-4.1-0` on Debian and
+Ubuntu, `webkit2gtk4.1` on Fedora, `webkit2gtk-4.1` on Arch. **SteamOS** (Steam Deck) does not
+include it and its system is read-only: in Desktop Mode open Konsole and run
+`sudo steamos-readonly disable`, `sudo pacman -S webkit2gtk-4.1`, `sudo steamos-readonly enable`
+(a password must be set first with `passwd`; when pacman complains about keys, run
+`sudo pacman-key --init` and `sudo pacman-key --populate archlinux holo` first; a SteamOS
+update can remove the package again, then run the same commands once more).
 On Android the same page shows in a web view over the game's window; iPhone, iPad and the Mac
 app have a launcher of their own (SwiftUI). The Drive page shows the chosen bus as a picture
 **drawn by the game's renderer** (the game program runs beside the launcher as its helper,
@@ -356,6 +367,7 @@ menu's, the timetable's, the plates under the notes - 0.2 to 1, the texts stayin
 as designed; `navigator_opacity` in older files),
 `navigator_corner` (`bottom-left` default, `bottom-right`, `top-left`, `top-right`),
 `nav_ai` (the other AI vehicles as dots on the navigator and the city map; on by default),
+`nav_surface` (the map's own water, green land, rivers and rail under the roads of the navigator and the city map, when the map has a package, see [MAP_PACKAGE.md](MAP_PACKAGE.md); on by default), `nav_light` (the navigator's maps in a light look; off by default),
 `ai_wait_timed_stops_only` (an AI timetable bus ahead of its time waits for its departure only
 at its first and last stop, railway stations and the stops the timetable gives a time of their
 own, and drives on from the others once boarding is done; off by default: it waits at every
@@ -840,7 +852,7 @@ Environment variables, all off unless set. The useful ones:
 | `OMSI_NO_LAN_MODS=1` | a LAN host serves no mods and a joining game fetches none |
 | `OMSI_BACKEND=vulkan\|dx12\|gl\|angle` | the graphics interface to ask first (the log lists every adapter each one offers; `angle`, also `dx11`/`d3d11`: OpenGL ES on ANGLE over DirectX 11, Windows, with ANGLE's DLLs beside the game) |
 | `OMSI_GPU_LIMITS=default\|downlevel` | pretend the graphics card can only do this much (tests of old cards) |
-| `OMSI_GPU_ARRAYS=textures\|nostorage` | read the scene's arrays from textures, as on OpenGL chips without storage buffers in the vertex shader (or without any: no per-pixel lamp light) - tests of old cards |
+| `OMSI_GPU_ARRAYS=textures\|nostorage\|lighttextures` | read the scene's arrays from textures, as on OpenGL chips without storage buffers in the vertex shader (or without any: no per-pixel lamp light; with `lighttextures` the lamps read from textures too, as on ANGLE) - tests of old cards |
 | `OMSI_GL_TEXTURE_UNITS=1` | with `OMSI_GPU_ARRAYS`, keep to the sixteen texture units OpenGL has there, as such a chip does: the enhanced graphics are left out (vanilla+ is drawn) |
 | `OMSI_RENDER_OCCLUDED=1` | draw even while the window is hidden (tests) |
 | `OMSI_CHECK_OBSTACLES=1` | offscreen: drive every lane as a bus and list the objects that would stop it |

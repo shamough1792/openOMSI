@@ -234,6 +234,7 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
     var metal = 0.0;
     var f0 = vec3<f32>(0.04);
     var rough = 0.8;
+    let probe_only = camera.clouds.w < 1.5;
     if (terrain) {
         rough = 0.92;
         f0 = vec3<f32>(0.03);
@@ -275,12 +276,20 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
         let masked = (u32(material.params2.w + 0.5) & 1u) != 0u;
         let metal_ok = (u32(material.params2.w + 0.5) & 4u) != 0u;
         metal = select(0.0, smoothstep(0.3, 0.85, refl), masked || metal_ok);
-        // (where the mask says nothing reflects - a tyre or a seal on the body's texture -
-        // it is no coat but the rough rubber or plastic of an unpolished surface. Any share
-        // at all is lacquer: the stock bodies' masks hold a few per cent - the MAN NL's
-        // 15 of 255 - which says how much the paint mirrors, not that it is rough; taken
-        // as roughness up to a share of a half, every such body came out matte, #2067)
-        let coat_rough = mix(0.8, 0.06, smoothstep(0.0, 0.04, refl));
+        // The coat is as smooth as lets it mirror, averaged over the angles, the share
+        // Omsi.exe lays over it: a polished 4 % coat mirrors 8.7 % on average (Fresnel's
+        // rise at grazing), a rough one less (2.5 % at 0.8, its grazing light scattered and
+        // shadowed by its own roughness). So a share of 8.7 % and more is smooth lacquer, the
+        // stock bodies' few per cent - the MAN NL's 15 of 255 - a satin one (taken as rough
+        // up to a share of a half they came out matte, #2067; smooth from 4 %, a body meant
+        // to mirror barely shone like glass against the light, #2474), and where the mask
+        // says nothing reflects - a tyre or a seal - the rough rubber or plastic it is.
+        // Between those and chrome, the share says how much the paint mirrors, not how
+        // sharply: Omsi.exe lays a soft sphere map over it, a blurred sheen of the sky. Taken
+        // as polished glass from 8.7 % on (0.2.42), the many mod bodies whose texture alpha
+        // holds a tenth to a half mirrored the grey sky like chrome - silver buses and AI
+        // cars that glowed (#2563, #2301). Only a share near the whole is a sharp mirror.
+        let coat_rough = max(clamp(0.06 + (0.087 - refl) * 11.9, 0.06, 0.8), mix(0.3, 0.06, smoothstep(0.5, 0.95, refl)));
         // Where the model says how much it mirrors - a [matl_envmap_mask], or the texture's
         // alpha under a [matl_transmap] (most mod bodies) - Omsi.exe lays the sphere map
         // over the paint by that share at every angle (shader.wgsl's environment stage):
@@ -548,7 +557,7 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
     // surface wore a milky sheen of the bright horizon, strongest against a low sun)
     let surround = enh.fog_color.rgb * (0.25 / 0.9);
     let open = smoothstep(-0.05, 0.35, r.z);
-    env = mix(surround, env, mix(open, 1.0, select(0.25, 0.5, reflective_env)));
+    env = mix(surround, env, mix(open, 1.0, select(0.25, 0.5, reflective_env && !(glass && probe_only))));
     // the cabin reflects the cabin, not the sky - and so does the bus's own glass seen
     // from the driver's seat
     let cab_view = max(in_cab, near_player_vehicle(in.world) * inside_vehicle(camera.cam_pos.xyz));
@@ -597,7 +606,7 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
         // (the photo's own contrast, as the vanilla picture shows it, held only off black
         // and off a blinding white; clamped to 0.35 .. 2 and laid on at two thirds, the
         // windows mirrored a flat grey where the vanilla ones mirror trees and sky)
-        let ratio = clamp(photo / lum_avg, vec3<f32>(0.12), vec3<f32>(3.5));
+        let ratio = clamp(photo / lum_avg, vec3<f32>(0.12), vec3<f32>(select(3.5, 1.0, glass && probe_only)));
         let band = 1.0 - smoothstep(0.25, 0.7, abs(r.z));
         // Only a smooth surface mirrors the photo; a satin one a quarter of its contrast.
         // (A car's bonnet is a handful of triangles: the photo's mip level by its footprint
@@ -720,13 +729,16 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
         // night, and less where the saloon lamps light the surface already. (As an emission
         // at 0.6 of the texture by day and on top of the lamps at night, a switched-on
         // cabin's light-mapped parts were flat white.)
-        let lm = textureSample(t_light, s_diffuse, buv).rgb;
-        let night = clamp(camera.sun_color.w, 0.0, 1.0);
-        let left = (vec3<f32>(1.0) - clamp(cabin_light, vec3<f32>(0.0), vec3<f32>(1.0))) * (0.12 + 0.88 * night);
-        let w = lm * left * clamp(in.params2.x, 0.0, 1.0);
+        let lm = textureSample(t_light, s_diffuse, buv).rgb * clamp(in.params2.x, 0.0, 1.0);
         if (material.emissive.w < -1.5) {
-            emit = emit + tex.rgb * w * max(enh.exposure.z * 2.0, 0.6);
+            let night = clamp(camera.sun_color.w, 0.0, 1.0);
+            let left = (vec3<f32>(1.0) - clamp(cabin_light, vec3<f32>(0.0), vec3<f32>(1.0))) * (0.12 + 0.88 * night);
+            emit = emit + tex.rgb * lm * left * max(enh.exposure.z * 2.0, 0.6);
         } else {
+            // (By day as by night: ADDSMOOTH lifts the surface to its texture's colour by the
+            // map whatever light it has, and what the light already gives - the day's, the
+            // saloon lamps' - is taken off below. Lifted by an eighth of that by day, a
+            // display in the cab's shade was far darker than in Vanilla+, #2051.)
             // ... and as there it lifts the surface to its texture's own colour at the
             // most, shown as a display is (see the unlit path): taken as a light of the
             // night's level on top, a white light map (`weiss.bmp`, laid on a display so
@@ -735,7 +747,7 @@ fn shade_enhanced(in: FsIn, puddle_weight: ptr<function, vec2<f32>>, capture: bo
             // light map stays as it was: its dots are meant to burn above their colour.)
             // The map's script variable controls its backlight. Dimming every light-mapped
             // surface as a cab screen hid instrument backlights even with the lights on.
-            emit = emit + max(display_level(tex.rgb) * enh.exposure.y - rgb, vec3<f32>(0.0)) * w;
+            emit = emit + max(display_level(tex.rgb) * enh.exposure.y - rgb, vec3<f32>(0.0)) * lm;
         }
     }
     if (material.emissive.w < -1.5) {

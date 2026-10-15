@@ -12,6 +12,7 @@
 //! launcher knows through `apple_bridge`.
 
 mod admin;
+mod check;
 use omsi_platform::discord;
 #[cfg(steam)]
 mod steam;
@@ -103,7 +104,7 @@ mod cli;
 mod diagnostics;
 mod perf_overlay;
 mod perf_report;
-mod profile_keys;
+pub(crate) use omsi_cfg::profile_keys;
 mod frame_stages;
 mod support_bundle;
 mod duty_start;
@@ -212,6 +213,11 @@ pub fn run() -> Result<()> {
     restart_with_allocator_settings();
     #[cfg(windows)]
     attach_parent_console();
+    // `--check-vehicle <file>`: the loaders' findings as JSON, no window, no log
+    if std::env::args().nth(1).as_deref() == Some("--check-vehicle") {
+        let rest: Vec<String> = std::env::args().skip(2).collect();
+        return check::run(&rest);
+    }
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     // a panic goes into the log (which the launcher keeps per session) with where it
     // happened and a backtrace, not only to a terminal that may not be there
@@ -707,7 +713,9 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             instructions_mark: None,
             profile_mark: None,
             frame_times: Vec::new(),
+            frame_stages: Vec::new(),
             overlay: Default::default(),
+            texture_cut_at: None,
         },
         sound: SoundState {
             radio,
@@ -752,6 +760,8 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             last_ctl_steer: None,
             mouse_pedals: (0.0, 0.0),
             mouse_kmh: 0.0,
+            wheel_zoomed_at: None,
+            camera_keys_off: false,
             pad_kmh: 0.0,
             pad_steer_target: 0.0,
             game_keys,

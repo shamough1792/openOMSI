@@ -9,6 +9,7 @@
 pub mod avatars;
 pub mod discord;
 pub mod presence;
+pub mod proxy;
 pub mod recovery;
 pub mod updater;
 pub mod webview2;
@@ -17,7 +18,7 @@ pub mod webview2;
 /// `build.rs`).
 pub const BUILD: &str = env!("OMSI_BUILD");
 
-/// The release version, `MAJOR.MINOR.COMMIT` (see `build.rs` and docs/VERSIONING.md).
+/// The release version, `MAJOR.MINOR.PATCH` (see `build.rs` and docs/VERSIONING.md).
 pub const VERSION: &str = env!("OPENOMSI_VERSION");
 
 /// Android: the calls into Java the services need (the system's package installer, the

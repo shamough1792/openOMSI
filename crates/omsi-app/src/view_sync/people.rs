@@ -22,7 +22,7 @@ use omsi_sim::people::cabin::DrawnBus;
 use omsi_sim::people::{BodyOp, BusId, Place};
 use omsi_sim::view_events::{PeopleFrame, PersonFrame};
 use omsi_sim::VehicleInstance;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 mod animation;
@@ -58,6 +58,7 @@ pub(crate) struct PeopleView {
     pub(crate) sync_frame: u32,
     /// Animation choice for this session, refreshed on Android in-process launches.
     pub(crate) enhanced_poses: bool,
+    pub(crate) mirror_hz: Option<f32>,
     /// The people are drawn with the avatars of "Character models: High quality" (this
     /// session's choice; see `avatars`).
     pub(crate) avatars: bool,
@@ -70,6 +71,8 @@ pub(crate) struct PeopleView {
     due: Vec<bool>,
     /// The avatar textures whose PBR maps went up already.
     pbr_done: hashbrown::HashSet<PathBuf>,
+    /// The avatars' pictures read ahead on the workers (see `avatars::Warm`).
+    warm: avatars::Warm,
     /// `OMSI_TRACE_PAX=<csv>`: every person near the eye, every frame (see `sync`).
     pub(crate) trace: Option<std::io::BufWriter<std::fs::File>>,
     /// The tear-off ticket blocks of the player's bus (`money::TicketBlocks`).
@@ -87,11 +90,13 @@ impl PeopleView {
             frame: PeopleFrame::default(),
             sync_frame: 0,
             enhanced_poses: animation::enabled(),
+            mirror_hz: None,
             avatars: avatars::enabled(),
             last_sync: 0.0,
             pose_stats: (0, 0, 0.0, 0.0),
             due: Vec::new(),
             pbr_done: hashbrown::HashSet::new(),
+            warm: avatars::Warm::default(),
             trace: omsi_cfg::flags::OMSI_TRACE_PAX.var().and_then(|f| std::fs::File::create(f).ok()).map(|f| {
                 use std::io::Write;
                 let mut w = std::io::BufWriter::new(f);
@@ -163,15 +168,25 @@ impl Humans {
             match op {
                 BodyOp::Spawn { id, ty, variant, position } => {
                     // (drawn as an avatar of the same kind when the player wants them)
-                    let avatar = if view.avatars { avatars::pool().and_then(|p| p.pick(id, &ty)) } else { None };
+                    let picked = if view.avatars { avatars::pool().and_then(|p| p.pick(id, &ty)) } else { None };
+                    // an avatar nobody was drawn with yet: the content's own human until its
+                    // pictures are read on a worker, then changed by `late_avatars`
+                    let avatar = picked.clone().filter(|a| view.gpu_materials.contains_key(&(Arc::as_ptr(a) as usize, 0, 0)));
+                    if let (Some(a), None) = (&picked, &avatar) {
+                        view.warm.ready(a, &world.root);
+                    }
+                    let t_make = std::time::Instant::now();
                     let meshes = match &avatar {
                         Some(a) => view.make_meshes(world, renderer, scene, a, 0, position),
                         None => view.make_meshes(world, renderer, scene, &ty, variant, position),
                     };
+                    if omsi_cfg::flags::OMSI_PROFILE.is_set() && t_make.elapsed().as_secs_f64() > 0.005 {
+                        log::info!("people: {} drawn in {:.1} ms", avatar.as_ref().unwrap_or(&ty).def.path.file_stem().unwrap_or_default().to_string_lossy(), t_make.elapsed().as_secs_f64() * 1000.0);
+                    }
                     let st = view.people.entry(id).or_default();
                     st.meshes = meshes;
                     // (somebody who came before the avatars were loaded gets one later, see `pose`)
-                    st.avatar_checked = !view.avatars || avatars::pool().is_some();
+                    st.avatar_checked = (!view.avatars || avatars::pool().is_some()) && picked.is_none() == avatar.is_none();
                     st.made_as = (Arc::as_ptr(&ty) as usize, variant);
                     st.avatar = avatar;
                 }
@@ -231,11 +246,7 @@ impl PeopleView {
                 let mut mats = Vec::new();
                 for (k, m) in hm.materials.iter().enumerate() {
                     // the variant's texture from its own folder first, else the default
-                    let (name, first) = ty.variant_texture(&m.texture, variant);
-                    let mut look: Vec<&Path> = first.into_iter().collect();
-                    look.extend(dirs.iter().map(|p| p.as_path()));
-                    let found = omsi_texture::find_texture(name, &look)
-                        .or_else(|| omsi_texture::find_texture(&m.texture, &look));
+                    let found = avatars::material_texture(ty, &dirs, &m.texture, variant);
                     if found.is_none() && !m.texture.trim().is_empty() {
                         log::warn!(
                             "human {}: texture {} not found",
@@ -244,14 +255,17 @@ impl PeopleView {
                         );
                     }
                     let found_path = found.clone();
+                    // (read ahead on a worker for an avatar, see `avatars::Warm`)
+                    let mut pre = found.as_ref().and_then(|p| self.warm.prepared.remove(p));
                     let tex = match found {
                         Some(path) => match self.gpu_textures.get(&path) {
                             Some(t) => *t,
                             None => {
-                                let t = world
-                                    .textures
-                                    .get_gpu_fast(&path)
-                                    .map(|(img, _)| renderer.add_texture_data(scene, &img));
+                                let data = match pre.as_mut().and_then(|p| p.0.take()) {
+                                    Some(d) => Some(d),
+                                    None => world.textures.get_gpu_fast(&path).map(|(img, _)| img),
+                                };
+                                let t = data.map(|img| renderer.add_texture_data(scene, &img));
                                 world.textures.release(&path);
                                 self.gpu_textures.insert(path, t);
                                 t
@@ -267,7 +281,11 @@ impl PeopleView {
                     // an avatar's normal maps lie beside its colour textures (`<texture>_normal`)
                     if let (Some(t), Some(path), true) = (tex, found_path.as_ref(), ty.face.is_some()) {
                         if self.pbr_done.insert(path.clone()) {
-                            if let Some(set) = omsi_texture::pbr::load_set(&omsi_texture::pbr::find(path)) {
+                            let set = match pre {
+                                Some((_, set)) => set,
+                                None => omsi_texture::pbr::load_set(&omsi_texture::pbr::find(path)),
+                            };
+                            if let Some(set) = set {
                                 renderer.add_pbr_maps(scene, t, &set);
                             }
                         }
@@ -284,6 +302,14 @@ impl PeopleView {
             meshes.push((id, inst));
         }
         meshes
+    }
+}
+
+/// The ticket blocks taken out of the picture (the player's bus they hung in is gone or
+/// another bus is driven): left in the scene they hung in the air where it last stood.
+pub(crate) fn drop_ticket_blocks(view: &mut PeopleView, renderer: &Renderer, scene: &mut Scene) {
+    if let Some(b) = view.ticket_blocks.take() {
+        b.remove(renderer, scene);
     }
 }
 
@@ -328,9 +354,15 @@ impl Humans {
         if let Some(pack) = self.sim.tickets.as_ref().map(|t| &t.path) {
             // (compared in place: both paths were copied for it every frame)
             let fresh = view.ticket_blocks.as_ref().is_none_or(|b| b.made_for.0 != bus.ty.def.path || b.made_for.1 != *pack);
-            if fresh && !bus.ty.def.attachments.is_empty() {
-                view.ticket_blocks = Some(crate::money::TicketBlocks::new(world, renderer, scene, bus, pack));
+            if fresh {
+                // (the blocks of the bus driven before go: they stayed in the air where it was)
+                drop_ticket_blocks(view, renderer, scene);
+                if !bus.ty.def.attachments.is_empty() {
+                    view.ticket_blocks = Some(crate::money::TicketBlocks::new(world, renderer, scene, bus, pack));
+                }
             }
+        } else {
+            drop_ticket_blocks(view, renderer, scene);
         }
         if let Some(b) = view.ticket_blocks.as_ref() {
             b.sync(renderer, scene, bus);
@@ -393,6 +425,7 @@ pub(crate) struct PersonView {
     /// Frames since the last pose and where the person stood then (the
     /// feet of a mesh posed a frame ago stay on the floor when it is drawn there).
     since_posed: u32,
+    since_posed_secs: f32,
     posed_at: (DVec3, f64),
     /// The interior light as drawn: it follows the bus's over a moment (stepping through
     /// the door, people lit up and went dark again from one frame to the next).
@@ -428,13 +461,24 @@ impl PeopleView {
         }
         let Some(pool) = avatars::pool() else { return };
         let waiting: Vec<(u32, Arc<HumanType>, DVec3)> = self.frame.people.iter().filter(|p| self.people.get(&p.id).is_some_and(|st| !st.avatar_checked)).map(|p| (p.id, p.ty.clone(), p.position)).collect();
+        // (one avatar's pictures up per frame: each is several large textures)
+        let mut first_uploads = 0;
         for (id, ty, position) in waiting {
-            let Some(st) = self.people.get_mut(&id) else { continue };
-            if st.avatar_checked {
+            if self.people.get(&id).is_none_or(|st| st.avatar_checked) {
                 continue;
             }
+            let a = pool.pick(id, &ty);
+            if let Some(a) = &a {
+                if !self.gpu_materials.contains_key(&(Arc::as_ptr(a) as usize, 0, 0)) {
+                    if !self.warm.ready(a, &world.root) || first_uploads > 0 {
+                        continue;
+                    }
+                    first_uploads += 1;
+                }
+            }
+            let Some(st) = self.people.get_mut(&id) else { continue };
             st.avatar_checked = true;
-            let Some(a) = pool.pick(id, &ty) else { continue };
+            let Some(a) = a else { continue };
             let old = std::mem::take(&mut st.meshes);
             let (tkey, variant) = st.made_as;
             for (mi, m) in old.iter().enumerate() {
@@ -473,8 +517,14 @@ impl PeopleView {
         let mut states: Vec<PersonView> = frame.people.iter().map(|p| self.people.remove(&p.id).unwrap_or_default()).collect();
         let mut due = std::mem::take(&mut self.due);
         due.clear();
+        let mirror_every = match self.mirror_hz {
+            None => 1,
+            Some(hz) if hz > 0.0 => ((1.0 / hz) / sdt.max(1e-3) + 0.05).floor().max(1.0) as u32,
+            Some(_) => 2,
+        };
         for (k, (p, st)) in frame.people.iter().zip(states.iter_mut()).enumerate() {
             st.since_posed = st.since_posed.saturating_add(1);
+            st.since_posed_secs += sdt;
             let d = p.position + DVec3::Z * 0.9 - from;
             let dist = d.length();
             let visible = match eye {
@@ -483,10 +533,10 @@ impl PeopleView {
             };
             // everybody the eye can make out is posed every frame: a pose every other
             // frame at 12-30 m moved walkers in steps and made planted feet shiver
-            // (within 30 m everybody, seen or not: the mirrors show the people behind the
-            // bus, who were posed every twelfth frame and moved in jerks there)
-            let every = if dist < 30.0 {
+            let every = if dist < 30.0 && visible {
                 1
+            } else if dist < 30.0 {
+                mirror_every
             } else if !visible {
                 12
             } else if dist < 45.0 {
@@ -519,7 +569,7 @@ impl PeopleView {
         let pose_one = |(p, st): &mut (&PersonFrame, &mut PersonView)| {
             // the type drawn: the person's avatar, else the content's own
             let ty = st.avatar.clone().unwrap_or_else(|| p.ty.clone());
-            let dt = (sdt * st.since_posed.max(1) as f32).min(0.25);
+            let dt = st.since_posed_secs.max(sdt).min(0.25);
             // Preserve the OMSI-original pose unless the enhanced A/B mode is requested.
             let bones = if enhanced && !p.puppet {
                 animation::bones(p, &ty, st, dt, world, &buses)
@@ -611,6 +661,7 @@ impl PeopleView {
                 }
                 st.skinned = true;
                 st.since_posed = 0;
+                st.since_posed_secs = 0.0;
                 st.posed_at = (p.position + st.glide_world, p.heading);
             }
             // riders go with their bus; on the ground a mesh not posed this frame goes on

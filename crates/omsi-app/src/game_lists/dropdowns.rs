@@ -273,6 +273,8 @@ pub(super) fn select_options(key: &str) -> Vec<(&'static str, &'static str)> {
         "ai_unsched_factor" => vec![("25", "25%"), ("50", "50%"), ("75", "75%"), ("100", "100%"), ("150", "150%"), ("200", "200%")],
         "ai_max_scheduled" => vec![("0", "All"), ("10", "At most 10"), ("25", "At most 25"), ("50", "At most 50")],
         "ai_max_parked" => vec![("-1", "None"), ("0", "Every space"), ("35", "At most 35"), ("100", "At most 100"), ("250", "At most 250")],
+        // (OMSI's AIMaxHumans, #2087)
+        "ai_max_humans" => vec![("50", "50"), ("100", "100"), ("200", "200"), ("400", "400"), ("720", "720"), ("1000", "1000")],
         "language" => omsi_launcher_lib::LANGUAGES.iter().map(|l| (l.0, l.1)).collect(),
         "vr_scale" => vec![("0.5", "50%"), ("0.65", "65%"), ("0.8", "80%"), ("1", "100%")],
         "vr_head_smoothing_ms" => vec![("0", "Off"), ("5", "5 ms"), ("10", "10 ms"), ("20", "20 ms"), ("30", "30 ms")],
@@ -328,11 +330,45 @@ pub(super) fn store_with(app: &mut App, change: impl FnOnce(&mut serde_json::Val
 pub(super) fn reload_settings(app: &mut App) {
     flush_settings(true);
     // (the seat is the bus's, see `bus_seats`: it is read again for the bus)
-    app.settings = crate::settings::Settings::load();
+    app.settings = settings_in_mode(session_mode(app));
     app.session.seat_bus.clear();
     crate::ui_language(&app.settings.language);
     crate::units::Units::from_setting(&app.settings.units).set();
     sync_live(app);
+}
+
+pub(super) fn session_mode(app: &App) -> &'static str {
+    mode_of_session(&app.args.session_settings, &app.settings.graphics)
+}
+
+pub(super) fn mode_of_session(session: &crate::startup::SessionSettings, graphics: &str) -> &'static str {
+    let traced = crate::settings::graphics_mode(graphics) == "enhanced_plus";
+    if session.enhanced_plus || (session.enhanced && traced) {
+        "enhanced_plus"
+    } else if session.enhanced {
+        "enhanced"
+    } else if session.classic {
+        "vanilla"
+    } else {
+        "vanilla_plus"
+    }
+}
+
+fn settings_in_mode(mode: &str) -> crate::settings::Settings {
+    let s = crate::settings::Settings::load();
+    if s.graphics == mode {
+        return s;
+    }
+    let text = crate::settings::Settings::path().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    let mut s = text_in_mode(&text, mode);
+    if let Some(n) = omsi_cfg::flags::OMSI_SAFE_GPU.parse::<u32>().filter(|n| *n > 0) {
+        s.apply_safe_gpu(n);
+    }
+    s
+}
+
+pub(super) fn text_in_mode(text: &str, mode: &str) -> crate::settings::Settings {
+    crate::settings::Settings::from_text(&format!("{text}\ngraphics={mode}\n"))
 }
 
 pub(super) fn sync_live(app: &mut App) {

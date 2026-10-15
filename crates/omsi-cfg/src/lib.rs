@@ -32,8 +32,12 @@ pub mod number;
 pub mod par;
 pub mod radio;
 pub mod panic_guard;
+pub mod profile_keys;
 pub mod vfs;
 pub mod install_search;
+pub mod copied_install;
+mod walk;
+use walk::{pop_within, resolve_existing};
 pub use install_search::find_original_install;
 pub use number::{parse_f32, parse_f64, parse_i32, parse_i64};
 pub use vfs::{add_content_zip, mount_zip};
@@ -215,9 +219,8 @@ impl<'a> CfgReader<'a> {
     }
 
     /// Skip `-<DISABLED>-` … `-<ENABLED>-` between blocks, as the original's loaders of
-    /// `.bus`/`.ovh`, `.sco`, `model.cfg`, `passengercabin.cfg`, `paths.cfg`, `.hum` and
-    /// `envir.cfg` do (the marker lines must stand alone, exactly so; a marker read as a
-    /// parameter is a parameter). Mods switch whole meshes off this way.
+    /// `.bus`/`.sco`/`model.cfg`/`paths.cfg` and the rest do: the marker lines must stand
+    /// alone, exactly so - a marker read as a parameter is a parameter. Mods use it.
     pub fn disabled_blocks(mut self) -> Self {
         self.disabled_blocks = true;
         self
@@ -368,6 +371,11 @@ impl<'a> CfgReader<'a> {
         parse_i64(self.line()).max(0) as usize
     }
 
+    pub fn count(&mut self) -> usize {
+        let n = self.usize();
+        n.min(self.file.lines.len().saturating_sub(self.pos))
+    }
+
     /// `1`/`true` → true; anything else false.
     pub fn bool(&mut self) -> bool {
         let w = self.word();
@@ -432,22 +440,23 @@ impl<'a> CfgReader<'a> {
 }
 
 /// Convert an OMSI content path (backslashes, case-insensitive on Windows) to a real path
-/// relative to `base`, resolving the case of every component on case-sensitive file systems.
-///
-/// The components of a content path the way Windows reads them: `\` and `/` both separate,
-/// empty and `.` components vanish, a folder name loses one trailing dot and the last name
-/// all trailing dots and spaces (Win32 path normalisation: an Ahlheim mesh asks for
-/// `anz-oben.jpg.`, which Windows opens as `anz-oben.jpg`). `..` is left for the caller.
+/// relative to `base`, resolving every component's case on case-sensitive systems. The
+/// components are as Windows reads them: `\` and `/` separate, empty and `.` vanish, a
+/// folder loses one trailing dot and the last name all trailing dots and spaces (an
+/// Ahlheim mesh's `anz-oben.jpg.` opens as `anz-oben.jpg`); `..` is left for the caller.
 pub fn windows_components(rel: &str) -> Vec<&str> {
     let parts: Vec<&str> = rel.trim().split(['/', '\\']).collect();
     let n = parts.len();
     let mut out = Vec::with_capacity(n);
     for (i, c) in parts.into_iter().enumerate() {
-        if c.is_empty() || c == "." {
+        if c.is_empty() || c == "." || c.contains(':') {
             continue;
         }
         if c == ".." {
             out.push(c);
+            continue;
+        }
+        if c.trim_matches(['.', ' ']).is_empty() {
             continue;
         }
         // a path ending in a separator has an empty last part, so its last folder counts
@@ -708,33 +717,6 @@ fn mirrored_base(base: &Path, root: &Path, roots: &[PathBuf]) -> Option<PathBuf>
     })
 }
 
-/// Case-insensitive walk of the components `rel` from `base` using the cached directory
-/// listings only; None as soon as a component does not exist.
-fn resolve_existing(base: &Path, rel: &[&str]) -> Option<PathBuf> {
-    let mut cur = base.to_path_buf();
-    for (i, comp) in rel.iter().enumerate() {
-        if comp.is_empty() || *comp == "." {
-            continue;
-        }
-        if *comp == ".." {
-            cur.pop();
-            continue;
-        }
-        let names = candidates_in_dir(&cur, comp);
-        if names.len() < 2 {
-            cur = cur.join(names.into_iter().next()?);
-            continue;
-        }
-        // Two names differing in case alone, on a case-sensitive file system: the folder
-        // meant is whichever one holds the rest of the path. An add-on unpacked beside the
-        // original folders leaves a `Maps` with the new map next to the `maps` holding all
-        // the others; both have to stay reachable.
-        let rest = &rel[i + 1..];
-        return names.iter().find_map(|n| resolve_existing(&cur.join(n), rest));
-    }
-    Some(cur)
-}
-
 /// The vehicle pack (`Vehicles/<folder>`, relative to its root) that `rel` from `base` lands
 /// in, when it does: the files of one vehicle refer to each other relative to its folder.
 fn vehicle_package(base: &Path, owner: &Path, rel: &[&str]) -> Option<String> {
@@ -776,17 +758,13 @@ fn package_definitions(root: &Path, package: &str) -> std::collections::HashSet<
 }
 
 /// Whether the copy of vehicle pack `package` under the higher-priority root `over` patches
-/// the one under `owner` (the root the vehicle was loaded from), i.e. its files replace
-/// the owner's the way files copied over an installation would.
-///
-/// That holds for a patch (no vehicle definitions of its own, or only ones the owner's pack
-/// has as well). A pack with vehicles the owner's copy does not know is another *version*
-/// of the pack - a map archive bundles its own Citaro Facelift next to the one installed
-/// in the content folder, with scripts, varlists and constfiles that belong together - and
-/// taking single files from it broke the bus it did not come from (the Ahlheim Citaro's
-/// VDV and IBIS scripts ran on the installed pack's varlists, missing half their
-/// variables, and every display stayed dark). Such a copy is only asked for files the
-/// owner's pack does not have.
+/// the one under `owner` (the root the vehicle was loaded from): its files replace the
+/// owner's, the way files copied over an installation would. A pack with vehicles the
+/// owner's copy does not know is another *version* of the pack - a map archive bundles its
+/// own Citaro Facelift next to the installed one, with scripts that belong together - and
+/// taking single files from it broke the bus they did not come from (the Ahlheim Citaro's
+/// VDV and IBIS scripts ran on the wrong varlists, every display stayed dark). Such a copy
+/// is only asked for files the owner's pack does not have.
 fn overlays_package(over: &Path, owner: &Path, package: &str) -> bool {
     type Key = (PathBuf, PathBuf, String);
     static CACHE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<Key, bool>>> =
@@ -861,7 +839,8 @@ pub fn resolve_path(base: &Path, rel: &str) -> PathBuf {
     // a mod's copy first: the same place under a content root of higher priority than the
     // one `base` belongs to
     let roots = content_roots();
-    let owner = if roots.len() > 1 { owner_root(base, &roots).cloned() } else { None };
+    let floor = owner_root(base, &roots).cloned();
+    let owner = floor.clone().filter(|_| roots.len() > 1);
     if let Some(owner) = &owner {
         let package = vehicle_package(base, owner, rel);
         for r in roots.iter().take_while(|r| *r != owner) {
@@ -882,7 +861,7 @@ pub fn resolve_path(base: &Path, rel: &str) -> PathBuf {
     let mut cur = base.to_path_buf();
     for comp in rel {
         if *comp == ".." {
-            cur.pop();
+            pop_within(&mut cur, floor.as_deref());
             continue;
         }
         // the folder's listing, kept from the first time, has the name spelled just so:
@@ -926,11 +905,10 @@ pub fn resolve_path(base: &Path, rel: &str) -> PathBuf {
 }
 
 /// What an installation of the original OMSI 2 must have for openOMSI to run on it: the
-/// game itself and the stock content every player gets with it (both stock maps, the stock
-/// buses, people, fonts, weather, inputs). Any copy of OMSI 2 has them, whatever version or
-/// shop it came from; a folder that lacks them (openOMSI's own content folder, a mod pack,
-/// a half-copied installation) is not a base to play on - everybody plays on the same
-/// original content.
+/// game and the stock content every player gets (both stock maps, the buses, people, fonts,
+/// weather, inputs). A folder without them (openOMSI's own content folder, a mod pack, a
+/// half-copied installation) is not a base to play on - everybody plays on the same original
+/// content.
 pub const ORIGINAL_ESSENTIALS: &[&str] = &[
     "Omsi.exe",
     "maps/Grundorf/global.cfg",
@@ -1413,6 +1391,7 @@ mod tests {
         assert_eq!(windows_components("Folder.\\"), vec!["Folder"]);
         assert_eq!(windows_components("str_gehweg02.bmp "), vec!["str_gehweg02.bmp"]);
         assert_eq!(windows_components(""), Vec::<&str>::new());
+        assert_eq!(windows_components("a\\.. \\...\\. .\\b.bmp"), vec!["a", "b.bmp"]);
         let dir = std::env::temp_dir().join(format!("omsi-cfg-paths-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("Texture").join("Bahn\u{fc}bergang")).unwrap();
         std::fs::write(dir.join("Texture").join("Bahn\u{fc}bergang").join("anz-oben.jpg"), b"x").unwrap();

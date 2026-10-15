@@ -52,7 +52,41 @@ fn fresh_webview_profile(app: &tauri::App) -> Option<std::path::PathBuf> {
     Some(dir)
 }
 
+/// Tell the games started from now on which screen this window stands on (#1959, #2025: the
+/// game opened on the main screen): the middle of the screen the window is on, else (no
+/// screen known) the window's own middle.
+fn remember_screen(window: &tauri::Window) {
+    let at = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|m| (m.position().x + m.size().width as i32 / 2, m.position().y + m.size().height as i32 / 2))
+        .or_else(|| {
+            let (p, s) = (window.outer_position().ok()?, window.outer_size().ok()?);
+            Some((p.x + s.width as i32 / 2, p.y + s.height as i32 / 2))
+        });
+    if at.is_some() {
+        omsi_launcher_lib::instances::set_screen_at(at);
+    }
+}
+
 fn main() {
+    // A panic ends the launcher with code 101, and on Windows it has no console to say why:
+    // the start guard only saw "ended on an error before its first frames" (#2574). Its
+    // message and place go into launcher.log, which the support package carries.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let at = info.location().map(|l| format!(" at {}:{}", l.file(), l.line())).unwrap_or_default();
+        let what = info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        let thread = std::thread::current().name().unwrap_or("unnamed").to_string();
+        omsi_launcher_lib::log_to_file(&format!("the launcher panicked on thread '{thread}'{at}: {what}"));
+        default_hook(info);
+    }));
     omsi_cfg::migrate_legacy_data_dir();
     omsi_launcher_lib::adopt_own_inputs();
     let args: Vec<String> = std::env::args().collect();
@@ -106,6 +140,7 @@ fn main() {
             if let Some(icon) = app.default_window_icon().cloned() {
                 let _ = window.set_icon(icon);
             }
+            remember_screen(&window.as_ref().window());
             commands::start_watch(app.handle().clone());
             if !selftest() {
                 discord::start();
@@ -113,6 +148,9 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } | tauri::WindowEvent::Focused(true)) {
+                remember_screen(window);
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if omsi_launcher_api::installing() {
                     api.prevent_close();

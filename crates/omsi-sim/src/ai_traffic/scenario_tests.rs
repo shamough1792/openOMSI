@@ -54,7 +54,7 @@ pub(super) fn street(start: DVec3, heading: f64, length: f64) -> crate::traffic:
 /// A junction object (one key, a path per direction) where four straight roads meet,
 /// 150 m of road before each of its paths and `exit` m after: lanes 0..4 the roads in
 /// (from the south, west, north, east), 4..8 the junction's paths, 8..12 the roads out.
-/// Without priorities: everybody gives way to the right.
+/// Without priorities: whoever comes first goes first.
 pub(super) fn crossroads(exit: f64) -> Network {
     let half = 12.0;
     let o = 1.75;
@@ -463,6 +463,18 @@ fn busy_crossroads(f: &Fixture, order: &[usize]) -> TrafficSim {
         t.place_car(vehicle, LaneKind::Street, lane, s, f.ty.clone(), 0x51 + k as u64 * 0x1000, None, Some(100 + k as u64), Some(4.0), None);
     }
     t
+}
+
+#[test]
+fn a_lane_heading_alone_is_the_heading_of_its_point() {
+    for (radius, heading) in [(0.0, 33.0), (25.0, 0.0), (40.0, 90.0), (12.0, 271.0)] {
+        let lane = LaneBuilder::arc(DVec3::new(5.0, -3.0, 1.0), heading, 120.0, radius, 0.0, LaneKind::Street, 3.0);
+        let mut s = -15.0f32;
+        while s < lane.length() + 15.0 {
+            assert_eq!(lane.heading_ext(s).to_bits(), lane.at_ext(s).1.to_bits(), "radius {radius} at {s}");
+            s += 0.37;
+        }
+    }
 }
 
 #[test]
