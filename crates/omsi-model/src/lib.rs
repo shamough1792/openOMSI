@@ -7,6 +7,12 @@
 use omsi_cfg::{CfgFile, CfgReader, Entry};
 use std::path::{Path, PathBuf};
 
+mod extensions;
+pub use extensions::SpotlightCookie;
+#[cfg(test)]
+mod extension_tests;
+mod pages;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum AnimOrigin {
     Trans([f32; 3]),
@@ -89,7 +95,52 @@ pub struct MaterialDef {
     /// `lightmap` is the last of them.
     pub lightmaps: Vec<(String, String)>,
     pub nightmap: Option<String>,
+    /// `[matl_glow] <texture> <value>`: the material is its own light. The named texture is a
+    /// **greyscale mask** of where and how much it shines (white full, black none) and the
+    /// light is the material's own colour; `value` is its strength on the LED panels' scale
+    /// (the `Led glow` setting's 16 levels: the shader's strength is `value * 0.25`, so 6 is
+    /// as bright as that setting's default and 20 brighter than its top). The mask takes the
+    /// light map's slot: a slot with a `[matl_lightmap]` keeps that and has no glow. An
+    /// openOMSI extension: Omsi.exe does not know the keyword, and the classic picture draws
+    /// the material as if it were not there.
+    pub glow: Option<(String, f32)>,
+    /// `[led_glow_effect] <value>` (openOMSI): how much of an LED panel's glow the slot
+    /// gets, 0..1 - 0 none (a flipdot or an LCD the automatic guess took for LED dots),
+    /// 1 the full `Led glow` setting. The modeller's word replaces the guess the enhanced
+    /// picture otherwise makes from the slot's `\S:n` mask and white light map.
+    pub led_glow: Option<f32>,
     pub allcolor: Option<[f32; 14]>,
+}
+
+impl MaterialDef {
+    /// Take what this block leaves unset from `base` (a `[matl_item]` over its slot's plain
+    /// `[matl]`).
+    pub fn inherit(&mut self, base: &MaterialDef) {
+        if !self.alpha_set && base.alpha_set {
+            self.alpha = base.alpha;
+            self.alpha_set = true;
+        }
+        self.no_z_write |= base.no_z_write;
+        self.no_z_check |= base.no_z_check;
+        if self.z_bias == 0 {
+            self.z_bias = base.z_bias;
+        }
+        macro_rules! opt {
+            ($($f:ident),*) => { $( if self.$f.is_none() { self.$f = base.$f.clone(); } )* };
+        }
+        opt!(envmap, envmap_mask, bumpmap, transmap, raindropmap, texcoord_trans_x, texcoord_trans_y, use_script_texture, use_text_texture, alphascale, freetex, nightmap, glow, led_glow, allcolor);
+        self.envmap_realtime |= base.envmap_realtime;
+        if self.tex_address == TexAddress::Wrap {
+            self.tex_address = base.tex_address;
+            if self.border_color == [0.0; 4] {
+                self.border_color = base.border_color;
+            }
+        }
+        if self.lightmaps.is_empty() && !base.lightmaps.is_empty() {
+            self.lightmaps = base.lightmaps.clone();
+            self.lightmap = base.lightmap.clone();
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -163,6 +214,13 @@ pub struct HtmlTextureDef {
     pub width: i32,
     pub height: i32,
     pub path: String,
+    /// `lit`, the word on the line after the page's path: the page is a **surface** - shaded
+    /// by the world's light like every other material - rather than the display such a page
+    /// is by default, drawn unlit at its own brightness, which is what a bus's own panel is.
+    /// The slots that take their picture from this page are drawn lit with it, wherever
+    /// they are - a scenery object's and a vehicle's alike (`Model::html_page_lit`). An
+    /// openOMSI extension: Omsi.exe knows neither part, and draws such a slot unlit.
+    pub lit: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -402,6 +460,7 @@ pub struct Model {
     pub particle_emitters: Vec<ParticleEmitter>,
     pub spotlights: Vec<Spotlight>,
     pub spotlights_2: Vec<Spotlight2>,
+    pub spotlight_cookies: Vec<SpotlightCookie>,
     pub interior_lights: Vec<InteriorLight>,
     /// `[light]` legacy lights (raw).
     pub lights: Vec<Vec<String>>,
@@ -450,6 +509,7 @@ impl Model {
                 Entry::Token(t) => m.handle_token(t, &mut r),
             }
         }
+        m.tidy_interior_lamps();
         m
     }
 
@@ -494,8 +554,52 @@ impl Model {
         self.meshes.last_mut()
     }
 
+    /// The material the `matl_*` commands act on: the last one selected - except right after
+    /// a `[matl_change]`, where Omsi.exe goes on with the slot's own material until the first
+    /// `[matl_item]` (0x5efae8: the change keeps the slot's record as the current one, and the
+    /// item later starts as a copy of it). An LED matrix that opens its change first and
+    /// writes `[matl_alpha]` and its script texture after it gives them to the slot itself:
+    /// kept on the change record, the slot stayed opaque and every dot of the panel shone.
+    /// A slot without a `[matl]` of its own gets one here, as Omsi.exe has a record for every
+    /// material of the mesh.
     fn cur_matl(&mut self) -> Option<&mut MaterialDef> {
-        self.meshes.last_mut().and_then(|m| m.materials.last_mut())
+        let mesh = self.meshes.last_mut()?;
+        let (texture, index) = match mesh.materials.last() {
+            Some(d) if !d.item && d.change.is_some() => (d.texture.clone(), d.index),
+            _ => return mesh.materials.last_mut(),
+        };
+        let base = |d: &MaterialDef| !d.item && d.change.is_none() && d.index == index && d.texture.eq_ignore_ascii_case(&texture);
+        let k = match mesh.materials.iter().rposition(base) {
+            Some(k) => k,
+            None => {
+                // (before the change, which stays the last record: the commands after this
+                // one still find it)
+                let at = mesh.materials.len() - 1;
+                mesh.materials.insert(at, MaterialDef { texture, index, ..Default::default() });
+                at
+            }
+        };
+        mesh.materials.get_mut(k)
+    }
+
+    /// `lit`, the word on the line after a page's path (see `HtmlTextureDef::lit`): taken
+    /// when it is there, and only that word - anything else leaves the reader where it was.
+    fn take_lit_flag(r: &mut CfgReader<'_>) -> bool {
+        let mut ahead = r.clone();
+        if ahead.word().eq_ignore_ascii_case("lit") {
+            *r = ahead;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// A text texture's full colour flag: Omsi.exe reads it with StrToInt into a byte and
+    /// tests that for non-zero (0x5f0919), so the `255` some add-ons write is set - read as
+    /// "not 1" the glyphs were filled with the RGB that follows (yellow on those fonts).
+    fn text_full_color(r: &mut CfgReader<'_>) -> bool {
+        let w = r.word();
+        w.eq_ignore_ascii_case("true") || omsi_cfg::parse_i32(w) != 0
     }
 
     /// Handle one model.cfg keyword. Returns `false` when the keyword is not part of the
@@ -561,16 +665,17 @@ impl Model {
                 let width = r.i32();
                 let height = r.i32();
                 let path = r.str().to_string();
+                let lit = Self::take_lit_flag(r);
                 let script_index = self.script_textures.len();
                 self.script_textures.push((width, height));
-                self.html_textures.push(HtmlTextureDef { script_index, width, height, path });
+                self.html_textures.push(HtmlTextureDef { script_index, width, height, path, lit });
             }
             "texttexture" => {
                 let variable = r.str().to_string();
                 let font = r.str().to_string();
                 let width = r.i32();
                 let height = r.i32();
-                let full_color = r.bool();
+                let full_color = Self::text_full_color(r);
                 let color = r.f32s::<3>();
                 self.text_textures.push(TextTexture { variable, font, width, height, full_color, color, orientation: 0, grid: 1 });
             }
@@ -585,7 +690,7 @@ impl Model {
                 let font = r.str().to_string();
                 let width = r.i32();
                 let height = r.i32();
-                let full_color = r.bool();
+                let full_color = Self::text_full_color(r);
                 let color = r.f32s::<3>();
                 let extra: Vec<String> = (0..2).map(|_| r.str().to_string()).collect();
                 let orientation = omsi_cfg::parse_i32(&extra[0]);
@@ -764,6 +869,7 @@ impl Model {
                 };
                 self.spotlights_2.push(Spotlight2 { values, variable, mirrored });
             }
+            "spotlight_cookie" => self.spotlight_cookies.push(SpotlightCookie::read(r)),
             "interiorlight" => {
                 let variable = r.str().to_string();
                 let range = r.f32();
@@ -771,6 +877,15 @@ impl Model {
                 let pos = r.f32s::<3>();
                 self.interior_lights.push(InteriorLight { variable, range, color, pos });
             }
+            _ => return self.handle_material_keyword(k, r),
+        }
+        true
+    }
+
+    /// `handle_keyword`'s second half: the texture changes, `[matl]` and the commands on the
+    /// material it opened, and the smoke and particle emitters.
+    fn handle_material_keyword(&mut self, k: &str, r: &mut CfgReader) -> bool {
+        match k {
             "texchanges" => self.texchanges.push(r.str().to_string()),
             "matl" => {
                 let texture = r.str().to_string();
@@ -802,7 +917,10 @@ impl Model {
                 // the variant of the preceding [matl_change]: starts as a copy of the base
                 // material, the following matl_* keywords change the variant only
                 if let Some(mesh) = self.cur_mesh() {
-                    if let Some(change) = mesh.materials.last().filter(|m| m.change.is_some()).cloned() {
+                    // (a second item starts from the slot's material as well, not from the
+                    // item before it: 0x5efae8 copies the record the [matl_change] picked)
+                    let open = mesh.materials.last().is_some_and(|m| m.change.is_some());
+                    if let Some(change) = mesh.materials.iter().rev().find(|m| open && m.change.is_some() && !m.item).cloned() {
                         // inherit the plain [matl] of the same slot (alpha, transmap, ...)
                         let base = mesh
                             .materials
@@ -810,8 +928,16 @@ impl Model {
                             .rev()
                             .find(|m| !m.item && m.change.is_none() && m.texture.eq_ignore_ascii_case(&change.texture) && m.index == change.index)
                             .cloned();
-                        let mut item = base.unwrap_or_else(|| MaterialDef { texture: change.texture.clone(), index: change.index, ..Default::default() });
-                        item.change = change.change.clone();
+                        // - with what was set after the [matl_change], which went to that
+                        // [matl] (see `cur_matl`): Omsi.exe copies the whole material record
+                        // into the new item (0x5efae8 -> 0x40a058), its
+                        // free texture, scrolling and border with it. Without them the SD77's
+                        // lit roller blind (`lights_stand`) lost its destination text and
+                        // scrolling with the lights on (#1419).
+                        let mut item = change.clone();
+                        if let Some(base) = base {
+                            item.inherit(&base);
+                        }
                         item.item = true;
                         mesh.materials.push(item);
                     }
@@ -904,6 +1030,25 @@ impl Model {
                 let t = r.str().to_string();
                 if let Some(m) = self.cur_matl() {
                     m.nightmap = Some(t);
+                }
+            }
+            "matl_glow" => {
+                // [matl_glow] <texture> <value>: the material is its own light. The picture is
+                // a greyscale mask of how much shines where, the light is the material's own
+                // colour (see `MaterialDef::glow`). A slot that also names a [matl_lightmap]
+                // keeps that, and the classic picture is left as if the keyword were absent.
+                let t = r.str().to_string();
+                let v = r.f32();
+                if let Some(m) = self.cur_matl() {
+                    m.glow = Some((t, v));
+                }
+            }
+            "led_glow_effect" => {
+                // (a value out of 0..1 is taken to the nearer end; a line that is no number
+                // reads as 0, as any number of the format does)
+                let v = r.f32();
+                if let Some(m) = self.cur_matl() {
+                    m.led_glow = Some(if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 });
                 }
             }
             "matl_allcolor" => {
@@ -1049,7 +1194,7 @@ pub fn parse_texchanges(file: &CfgFile) -> Vec<TexChangeMaster> {
                 out.push(TexChangeMaster { texture, variable, entries: Vec::new(), dir: dir.clone() });
             }
             "entries" => {
-                let n = r.usize();
+                let n = r.count();
                 let entries: Vec<String> = (0..n).map(|_| r.str().trim().to_string()).collect();
                 if let Some(m) = out.last_mut() {
                     m.entries = entries;
@@ -1078,6 +1223,44 @@ pub fn load_texchanges(base: &Path, files: &[String]) -> Vec<TexChangeMaster> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn compatibility_fixture_preserves_material_slots_and_variant_inheritance() {
+        let file = omsi_cfg::CfgFile::from_str(
+            "synthetic-material.cfg",
+            include_str!("../tests/fixtures/material-compatibility.cfg"),
+        );
+        // OMSI's known keywords require their original spelling. A typo in a
+        // synthetic fixture must not masquerade as missing material support.
+        for line in file.lines.iter().filter(|l| l.starts_with('[')) {
+            assert!(omsi_cfg::keyword_of(line).is_some(), "invalid fixture keyword: {line}");
+        }
+        let model = super::Model::parse(&file);
+        let materials = &model.meshes[0].materials;
+        assert_eq!(materials.len(), 4);
+        let base = &materials[0];
+        assert_eq!((base.alpha, base.alpha_set), (2, true));
+        assert!(base.no_z_write && base.no_z_check);
+        assert_eq!(base.z_bias, 1);
+        assert_eq!(base.alphascale.as_deref(), Some("display_alpha"));
+        assert_eq!(base.freetex, Some(("display.dds".into(), "display_texture".into())));
+        assert_eq!(base.lightmaps, vec![("bright.dds".into(), "bright".into()), ("dim.dds".into(), "dim".into())]);
+        assert_eq!(base.lightmap, base.lightmaps.last().cloned());
+        let other = &materials[1];
+        assert_eq!((other.texture.as_str(), other.index), ("display.dds", 1));
+        assert!(!other.alpha_set && other.lightmaps.is_empty());
+        let variant = &materials[3];
+        assert!(variant.item);
+        assert_eq!(variant.change, Some(("DISPLAY.dds".into(), 0, "display_mode".into())));
+        assert_eq!(variant.alpha, base.alpha);
+        assert_eq!((variant.no_z_write, variant.no_z_check, variant.z_bias),
+            (base.no_z_write, base.no_z_check, base.z_bias));
+        assert_eq!(variant.alphascale, base.alphascale);
+        assert_eq!(variant.freetex, base.freetex);
+        assert_eq!(variant.lightmaps, base.lightmaps);
+        assert_eq!(variant.transmap.as_deref(), Some("mask.dds"));
+        assert!(base.transmap.is_none(), "variant changes must not mutate the base slot");
+    }
 
     #[test]
     fn terrain_hole_meshes_are_independent_of_render_meshes() {
@@ -1134,6 +1317,29 @@ mod tests {
         assert!(a.envmap.is_some());
     }
 
+    /// `[matl_glow] <texture> <value>`: the material is its own light - the picture and the
+    /// strength are kept. Additive: a slot that also has a `[matl_lightmap]` keeps it.
+    #[test]
+    fn a_matl_glow_reads_its_picture_and_strength() {
+        let text = "[mesh]\nled.o3d\n\n[matl]\nled.dds\n0\n[matl_glow]\nled.png\n20\n";
+        let m = Model::parse(&omsi_cfg::CfgFile::from_str("model.cfg", text));
+        let (tex, v) = m.meshes[0].materials[0].glow.clone().expect("a [matl_glow]");
+        assert_eq!(tex, "led.png");
+        assert_eq!(v, 20.0);
+        // the slot after it still reads as itself (an old .cfg that wrote a third number
+        // there leaves a line the material manager has no use for, and nothing else)
+        let text = "[mesh]\nled.o3d\n\n[matl]\nled.dds\n0\n[matl_glow]\nled.png\n5\n[matl_alpha]\n1\n";
+        let m = Model::parse(&omsi_cfg::CfgFile::from_str("model.cfg", text));
+        let (_, v) = m.meshes[0].materials[0].glow.clone().expect("a [matl_glow]");
+        assert_eq!(v, 5.0);
+        assert_eq!(m.meshes[0].materials[0].alpha, 1, "the keyword after it still counts");
+        let both = "[mesh]\nled.o3d\n\n[matl]\nled.dds\n0\n[matl_lightmap]\nl.bmp\nlights\n[matl_glow]\nled.png\n5\n";
+        let m = Model::parse(&omsi_cfg::CfgFile::from_str("model.cfg", both));
+        let d = &m.meshes[0].materials[0];
+        assert!(d.lightmap.is_some(), "{d:?}");
+        assert_eq!(d.glow.as_ref().map(|g| g.1), Some(5.0));
+    }
+
     /// A mesh before the first [LOD] belongs to that level (the WH UK AI cars' shadow).
     #[test]
     fn a_mesh_before_the_first_lod_joins_it() {
@@ -1179,6 +1385,35 @@ mod tests {
         assert_eq!(m.set_vars, vec![("lost".to_string(), 1.0)]);
     }
 
+    /// A text texture's full colour flag is set by any non-zero number, as Omsi.exe tests it:
+    /// add-ons that write 255 there drew their texts in the yellow that follows.
+    #[test]
+    fn text_texture_full_colour_flag_is_any_non_zero_value() {
+        let text = |flag: &str| {
+            format!("[texttexture]\nnr\nArial\n256\n32\n{flag}\n255\n255\n0\n[texttexture_enh]\nnr\nArial\n256\n32\n{flag}\n255\n255\n0\n1\n1\n")
+        };
+        for (flag, want) in [("255", true), ("1", true), ("true", true), ("0", false)] {
+            let m = Model::parse(&CfgFile::from_str("model.cfg", &text(flag)));
+            assert!(m.text_textures.iter().all(|t| t.full_color == want), "{flag}");
+            assert_eq!(m.text_textures.len(), 2);
+        }
+    }
+
+    /// A `[matl_item]` is a copy of the material before it: the SD77's lit roller blind
+    /// keeps its free texture, scrolling and border (#1419).
+    #[test]
+    fn a_material_item_copies_the_change_before_it() {
+        let text = "[mesh]\nrollo.o3d\n[matl_change]\nzielband1.bmp\n0\nlights_stand\n[matl_freetex]\nzielband1.bmp\nRollband_Tex_V\n[texcoordtransY]\nrlbnd_ziel_trans\n[matl_texadress_border]\n255\n255\n255\n0\n[matl_alpha]\n1\n[matl_item]\n[matl_lightmap]\nzielbeleuchtung.bmp\n";
+        let m = Model::parse(&CfgFile::from_str("model.cfg", text));
+        let item = m.meshes[0].materials.iter().find(|x| x.item).expect("the item");
+        assert_eq!(item.freetex.as_ref().map(|f| f.1.as_str()), Some("Rollband_Tex_V"));
+        assert_eq!(item.texcoord_trans_y.as_deref(), Some("rlbnd_ziel_trans"));
+        assert_eq!((item.alpha, item.tex_address), (1, TexAddress::Border));
+        assert_eq!(item.lightmap.as_ref().map(|l| l.0.as_str()), Some("zielbeleuchtung.bmp"));
+        let base = m.meshes[0].materials.iter().find(|x| !x.item).unwrap();
+        assert!(base.lightmap.is_none(), "the lit map is the item's only");
+    }
+
     #[test]
     fn an_html_texture_takes_a_script_texture_index() {
         let text = "[scripttexture]\n64\n32\n\n[htmltexture]\n800\n480\nhtml\\demo.html\n\n[mesh]\nx.o3d\n\n[matl]\nx.dds\n0\n[useHtmlTexture]\n0\n";
@@ -1188,6 +1423,27 @@ mod tests {
         assert_eq!(m.html_textures[0].script_index, 1);
         assert_eq!(m.html_textures[0].path, "html\\demo.html");
         assert_eq!(m.meshes[0].materials[0].use_script_texture, Some(1));
+    }
+
+    /// `lit` after a page's path: the page is a surface rather than a display, and the
+    /// keyword after it is still read as a keyword.
+    #[test]
+    fn a_page_can_be_declared_lit() {
+        let text = "[htmltexture]\n800\n480\nhtml\\demo.html\nlit\n\n[mesh]\nx.o3d\n\n[matl]\nx.dds\n0\n[useHtmlTexture]\n0\n";
+        let m = Model::parse(&omsi_cfg::CfgFile::from_str("model.cfg", text));
+        assert_eq!(m.html_textures.len(), 1);
+        assert!(m.html_textures[0].lit, "the word after the path");
+        assert_eq!(m.meshes[0].materials[0].use_script_texture, Some(0), "the slots still bind the page");
+        let text = "[htmltexture]\n800\n480\nhtml\\demo.html\n\n[mesh]\nx.o3d\n\n[matl]\nx.dds\n0\n[useHtmlTexture]\n0\n";
+        let m = Model::parse(&omsi_cfg::CfgFile::from_str("model.cfg", text));
+        assert!(!m.html_textures[0].lit, "without the word it stays a display");
+        assert_eq!(m.meshes[0].materials[0].use_script_texture, Some(0));
+        let text = "[htmltexture]\n64\n32\nsign.html\nlit\n\n[htmltexture]\n64\n32\nother.html\n\n[mesh]\nx.o3d\n";
+        let m = Model::parse(&omsi_cfg::CfgFile::from_str("model.cfg", text));
+        assert!(m.html_textures[0].lit && !m.html_textures[1].lit, "each page has its own word");
+        assert!(m.html_page_lit(0) && !m.html_page_lit(1), "the lookup every consumer asks");
+        assert_eq!(m.html_page(1).map(|p| p.path.as_str()), Some("other.html"));
+        assert!(m.html_page(2).is_none(), "no page of that script index");
     }
 
     /// A tab-indented block (the stock F90 lorry's second rear axle, whose mesh does not

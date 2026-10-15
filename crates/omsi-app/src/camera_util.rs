@@ -96,8 +96,8 @@ pub(crate) fn look_of(args: &Args) -> (f32, f32) {
 /// How far the offscreen outside camera sits from the vehicle: 18 m, or `OMSI_ORBIT_DIST`
 /// metres for close-ups (a headlight, a door) together with `--look`.
 pub(crate) fn offscreen_orbit() -> f32 {
-    omsi_cfg::env::var("OMSI_ORBIT_DIST")
-        .ok()
+    omsi_cfg::flags::OMSI_ORBIT_DIST
+        .var()
         .and_then(|v| v.trim().parse().ok())
         .unwrap_or(18.0)
 }
@@ -202,7 +202,7 @@ pub(crate) fn follow_camera(traffic: Option<&traffic::Traffic>, id: u64) -> Opti
     // the picture; `yaw` may be a list a/b/c, one per snapshot (--snapshots); a sixth value
     // 1 reads the offset as east, north, up and the yaw as a compass heading, so the view
     // does not turn with the car
-    if let Ok(v) = omsi_cfg::env::var("OMSI_FOLLOW_CAM") {
+    if let Some(v) = omsi_cfg::flags::OMSI_FOLLOW_CAM.var() {
         thread_local!(static CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) });
         let mut fields: Vec<String> = v.split(',').map(|x| x.trim().to_string()).collect();
         if let Some(yaws) = fields.get_mut(3).filter(|y| y.contains('/')) {
@@ -328,23 +328,35 @@ pub(crate) fn driver_eye(p: &Player) -> DVec3 {
         return t.camera_world_full(c).0;
     }
     let def = &p.vehicle.ty.def;
-    let n = def.cameras_driver.len().max(1);
-    match def.cameras_driver.get((def.camera_std + p.cam_choice.0) % n) {
+    match def.cameras_driver.get(p.driver_camera_slot()) {
         Some(c) => p.vehicle.camera_world(c).0 + p.vehicle.body_rotation().transform_vector3(p.head_offset() + p.seat).as_dvec3(),
         None => p.vehicle.position + DVec3::Z * 2.0,
     }
 }
 
-/// Draw the views of the vehicle's `[add_camera_reflexion]` cameras into its mirror textures.
-/// `only`: render just one mirror, the `i % n`-th of those `view` sees (round robin, as
-/// OMSI takes its turns among the mirrors in the picture; with no view, of all of them).
+/// Which of the vehicle's mirrors [`render_mirrors`] draws.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum MirrorPick<'a> {
+    /// Every mirror `view` sees (all of them with no view) but those in the list.
+    All(&'a [usize]),
+    /// Just one, the `k % n`-th of those `view` sees and the list leaves out (round robin, as
+    /// OMSI takes its turns among the mirrors in the picture).
+    Turn(usize, &'a [usize]),
+    /// These mirrors, seen or not (the mirror panels': they are on the screen wherever the
+    /// glass is).
+    Only(&'a [usize]),
+}
+
+/// Draw the views of the vehicle's `[add_camera_reflexion]` cameras into its mirror textures,
+/// those `pick` takes; the number of mirrors it chose among (those in the picture, or the
+/// list `Only` gives).
 pub(crate) fn render_mirrors(
     renderer: &mut Renderer,
     scene: &mut Scene,
     world: &scene::World,
     p: &Player,
     lighting: &omsi_render::Lighting,
-    only: Option<usize>,
+    pick: MirrorPick,
     view: Option<(Camera, f32)>,
 ) -> usize {
     // (aimed from the eye of the view being drawn, as Omsi.exe aims them - from the
@@ -380,7 +392,7 @@ pub(crate) fn render_mirrors(
     let mut lighting = lighting.clone();
     // a mirror's small picture: nothing smaller than a few of its pixels, and nothing much
     // beyond what a mirror shows (the far distance below)
-    let px = crate::MIRROR_SIZE.load(std::sync::atomic::Ordering::Relaxed).max(64) as f32;
+    let px = world.settings.mirror_size().max(64) as f32;
     lighting.min_obj_size = lighting.min_obj_size.max((12.0 / px).clamp(0.03, 0.09));
     lighting.shadows = false;
     // Enhanced graphics draw the mirrors with the plain shading (see Renderer::render_inner),
@@ -390,7 +402,7 @@ pub(crate) fn render_mirrors(
     // (By the sun's darkness, Envir_Brightness's ramp from +6 to -6 degrees: `night` is
     // whole at sunset already, from +10 degrees on, and rain raises it by day, and the
     // mirrors were a fifth of the window's light through the whole dusk, #432.)
-    if lighting.enhanced && omsi_cfg::env::var_os("OMSI_MIRROR_ENHANCED").is_none() {
+    if lighting.enhanced && !omsi_cfg::flags::OMSI_MIRROR_ENHANCED.is_set() && !renderer.options.mirror_enhanced {
         let alt = lighting.sun_dir.z.clamp(-1.0, 1.0).asin().to_degrees();
         let dark = 1.0 - ((alt + 6.0) / 12.0).clamp(0.0, 1.0);
         let k = 1.0 - MIRROR_NIGHT_DIM * dark;
@@ -407,15 +419,22 @@ pub(crate) fn render_mirrors(
     }
     // the mirrors in the picture (all of them without a view); none in it, none redrawn (a
     // static camera's screen is somewhere else than the camera: it always takes its turn)
-    let seen: Vec<usize> = (0..cams.len())
-        .filter(|&i| cams[i].0.fixed || view.as_ref().map(|v| mirror_in_view(cams[i].1 .0, cams[i].0.extra.unwrap_or(0.0).max(MIRROR_MIN_RADIUS), v)).unwrap_or(true))
-        .collect();
+    let seen: Vec<usize> = match pick {
+        MirrorPick::Only(set) => (0..cams.len()).filter(|i| set.contains(i)).collect(),
+        MirrorPick::All(skip) | MirrorPick::Turn(_, skip) => (0..cams.len())
+            .filter(|i| !skip.contains(i))
+            .filter(|&i| cams[i].0.fixed || view.as_ref().map(|v| mirror_in_view(cams[i].1 .0, cams[i].0.extra.unwrap_or(0.0).max(MIRROR_MIN_RADIUS), v)).unwrap_or(true))
+            .collect(),
+    };
     if seen.is_empty() {
         return 0;
     }
-    let pick = only.map(|k| seen[k % seen.len()]);
+    let turn = match pick {
+        MirrorPick::Turn(k, _) => Some(seen[k % seen.len()]),
+        _ => None,
+    };
     for (i, (c, at)) in cams.iter().enumerate() {
-        if !seen.contains(&i) || pick.is_some_and(|k| k != i) {
+        if !seen.contains(&i) || turn.is_some_and(|k| k != i) {
             continue;
         }
         let Some(Some(tex)) = textures.get(i) else {
@@ -423,7 +442,7 @@ pub(crate) fn render_mirrors(
         };
         let (eye, yaw, pitch, roll) = *at;
         let pitch = pitch.clamp(-89.0, 89.0);
-        if omsi_cfg::env::var_os("OMSI_DEBUG_MIRRORS").is_some() {
+        if omsi_cfg::flags::OMSI_DEBUG_MIRRORS.is_set() {
             log::info!("mirror {i}: eye {:.2},{:.2},{:.2} yaw {yaw:.1} pitch {pitch:.1} roll {roll:.2} fov {:.0} ({} of {} in view)", eye.x, eye.y, eye.z, c.fov, seen.len(), cams.len());
         }
         let cam = Camera {
