@@ -4,6 +4,14 @@
 
 ## 開發前同步與分支
 
+### 開發基準與發布階段
+
+- 一般新功能與修復一律以最新 `upstream/main` 為開發基準，先整合至本地 `main`，再建立獨立分支；PR 的目標仍為官方 repository 的 `main`。
+- Beta／Pre-release 與 Stable 是發布階段，不是兩條獨立的開發分支。依 `CONTRIBUTING.md` 的發布流程，維護者從 `main` 發布 Beta，經測試後將該版本升為 Stable。
+- 不得僅因問題發生於 Stable，就從 Stable 或 Pre-release 的 tag 開始一般開發；這些 tag 可用來重現問題及比較回歸。若維護者明確指定維護分支或 backport 目標，才依該指示另行處理。
+
+### 同步與建立分支
+
 在開始任何新功能或修復前，必須先確認工作樹狀態，並同步 `upstream` 的目標分支：
 
 ```powershell
@@ -14,6 +22,8 @@ git merge --ff-only upstream/main
 ```
 
 若目前有未提交變更，必須先保留或處理這些變更，再進行同步；不得覆蓋或捨棄既有工作。
+
+若 `--ff-only` 因本地 `main` 與 `upstream/main` 分歧而失敗，先檢查 `git log --left-right --oneline main...upstream/main`。確認本地獨有提交應保留後，使用 `git merge --no-edit upstream/main` 整合並保留雙方歷史；不得使用 reset 或強制推送捨棄本地規範與既有提交。合併成功後才建立開發分支。
 
 若同步時發生 merge conflict，必須停止並回報衝突檔案與待決定的處理方式，不得猜測或覆蓋衝突內容。
 
