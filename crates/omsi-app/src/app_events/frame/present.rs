@@ -23,6 +23,7 @@ pub(super) fn lighting(cx: LightingCx, dt: f32, daylight: omsi_sim::Daylight) ->
         cx.weather.weather.as_ref(),
         *cx.weather.cloud_drift,
         *cx.weather.wetness,
+        cx.weather.rain.snow_cover(),
         cx.world.world.as_deref(),
         inside,
         cx.player.player.as_ref().map(|p| &p.vehicle),
@@ -146,10 +147,15 @@ impl App {
                     s.config.height,
                     image::ColorType::Rgba8,
                 ) } {
-                Ok(()) => log::info!(
-                    "input script: window picture written to {}",
-                    path.display()
-                ),
+                Ok(()) => {
+                    log::info!("input script: window picture written to {}", path.display());
+                    if !include_touch {
+                        crate::platform::to_gallery(&path);
+                        if cfg!(target_os = "android") {
+                            self.service_msg = Some((omsi_ui::tr("Screenshot saved to the gallery").into_owned(), 4.0));
+                        }
+                    }
+                }
                 Err(e) => log::warn!(
                     "input script: {} could not be written: {e}",
                     path.display()

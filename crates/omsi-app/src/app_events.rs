@@ -133,7 +133,7 @@ impl ApplicationHandler for App {
                 self.finish_vr_nav_edit();
                 self.input.window_focused = false;
                 if let Some(ctl) = self.input.controllers.as_mut() {
-                    ctl.set_focus(false);
+                    ctl.set_focus(self.settings.ctrl_background);
                 }
                 #[cfg(windows)]
                 {
@@ -857,6 +857,7 @@ fn timetable_rows(duty: Option<&crate::schedule::PlayerDuty>, delay: Option<f64>
             name: s.name.trim().to_string(),
             arr: if Some(k) == first { String::new() } else { hm(s.arr) },
             dep: if Some(k) == last { String::new() } else { hm(s.dep) },
+            expected: if k < d.next_stop { String::new() } else { hm((if Some(k) == first { s.dep } else { s.arr } + delay.unwrap_or(0.0)).rem_euclid(86400.0)) },
             state: if k < d.next_stop { 0 } else if k == d.next_stop { 1 } else { 2 },
         })
         .collect();

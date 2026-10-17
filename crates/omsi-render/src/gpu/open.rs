@@ -381,6 +381,12 @@ impl Opened {
                 log::warn!("{}: the graphics device was lost while the chosen MSAA was tried again ({why}); keeping to what worked before", info.name);
                 return Box::pin(Renderer::new_on(adapter, None, Some(format), asked_options)).await;
             }
+            if basic_pipelines() && rainfall_pipeline() {
+                log::warn!("{}: the graphics device was lost while the basic pipelines were made ({why}); opening it again without the rainfall", info.name);
+                RAINFALL_LEFT_OUT.store(true, std::sync::atomic::Ordering::Relaxed);
+                fallback_store(&name, Some((1, true)));
+                return Box::pin(Renderer::new_on(adapter, None, Some(format), asked_options)).await;
+            }
             if basic_pipelines() {
                 return Err(anyhow!("the graphics device was lost while the pipelines were made: {why}"));
             }
@@ -475,7 +481,11 @@ impl Renderer {
             match errors.iter().flatten().chain(&caught).next() {
                 None => {
                     if msaa != options.msaa || basic {
-                        log::warn!("{}: drawing with {}x MSAA{}", info.name, msaa, if basic { ", without the snowfall, the lamps in the fog and the street lamps' shadows" } else { "" });
+                        log::warn!("{}: drawing with {}x MSAA{}", info.name, msaa, match (basic, rainfall_pipeline()) {
+                            (true, true) => ", without the snowfall, the lamps in the fog and the street lamps' shadows",
+                            (true, false) => ", without the snowfall, the rainfall, the lamps in the fog and the street lamps' shadows",
+                            _ => "",
+                        });
                     }
                     // (a fallback that worked is the first try next time; the full set
                     // working again forgets it)
@@ -516,10 +526,12 @@ impl Renderer {
         let shadows = shadows::build(&device, &scene, shadow_size);
         let defaults = defaults::build(&device, &queue, options.anisotropy);
         let (coronas, corona_texture) = coronas::Coronas::new(&device, &queue, &scene);
-        let snow = coronas::Snow::new(&device, &scene.camera_layout);
+        let precip = crate::passes::PrecipMap::new(&device);
+        let snow = coronas::Precip::snow(&device, &scene.camera_layout, &precip.view);
+        let rain = coronas::Precip::rain(&device, &scene.camera_layout, &precip.view);
         drop(corona_texture);
         let sky = sky::SkyBase::new(&device, &queue, &scene.camera_layout, !leave_out_enhanced);
-        let passes = passes::PassKit { device: &device, scene: &scene, coronas: &coronas, snow: &snow, sky: &sky, msaa }
+        let passes = passes::PassKit { device: &device, scene: &scene, coronas: &coronas, snow: &snow, rain: &rain, sky: &sky, msaa }
             .build(format, hdr_format, leave_out_enhanced);
         let (sky_sampler, sky_mesh) = sky::dome(&device, &queue);
         let overlays = overlays::Overlays::new(&device, format, msaa);
@@ -587,6 +599,8 @@ impl Renderer {
                 corona_bind_group: coronas.bind_group,
                 snow_buf: snow.buf,
                 snow_bind_group: snow.bind_group,
+                rain_buf: rain.buf,
+                rain_bind_group: rain.bind_group,
                 smoke_bind_group: coronas.smoke_bind_group,
                 corona_textures: Vec::new(),
                 pictures_taken: (0, 0),
@@ -618,6 +632,7 @@ impl Renderer {
                 xr_shadow_cache: std::cell::Cell::new(None),
                 shadow_clear_pipeline: shadows.clear_pipeline,
                 lamp_tiles: Default::default(),
+                precip,
                 shadow_view: shadows.view,
                 shadow_view_far: shadows.view_far,
                 shadow_sampler: shadows.sampler,
@@ -691,6 +706,7 @@ impl Renderer {
             env_heading: Default::default(),
             blend_by_origin: false,
             gpu_timers,
+            pictures: Default::default(),
             stats: Default::default(),
             counts: Default::default(),
             frame_draws: (0, 0),

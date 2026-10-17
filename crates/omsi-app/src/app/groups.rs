@@ -255,6 +255,7 @@ pub(crate) struct InputState {
     pub(crate) clock_hold: f32,
     /// A controller button held for looking left, right, up, down (`view_look_*`).
     pub(crate) pad_look: [bool; 4],
+    pub(crate) pad_repeat: Vec<String>,
     /// A controller button held for the multiplayer bus radio (`voice_radio`).
     pub(crate) pad_voice_radio: bool,
     /// The arrow keys turned the head (a glance that comes back when they are let go).
@@ -427,6 +428,7 @@ pub(crate) struct MenuState {
     /// A binding chosen in the pause menu that is waiting for the next physical key:
     /// (true: [game], false: [vehicles], index in that section).
     pub(crate) key_capture: Option<(bool, usize)>,
+    pub(crate) ctrl_add_action: bool,
     /// Whether the game stood paused before the menu opened (closing it goes back to that).
     pub(crate) menu_prev_pause: bool,
     /// OMSI's information bar (`view_toggle_informationdisplay`, Ctrl+Y): time, speed, the
@@ -517,6 +519,7 @@ pub(crate) struct SessionState {
     /// The current METAR receiver is a single manual fetch rather than the continuous sync.
     pub(crate) metar_once: bool,
     pub(crate) metar_next: f64,
+    pub(crate) tomorrow: crate::weather_tomorrow::Tomorrow,
     /// The sky's cloud type and the physical weather model (see `weather_setup::SkyState`).
     pub(crate) sky: crate::weather_setup::SkyState,
 }

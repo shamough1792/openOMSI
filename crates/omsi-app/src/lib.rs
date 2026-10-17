@@ -12,12 +12,12 @@
 //! launcher knows through `apple_bridge`.
 
 mod admin;
-mod check;
+use omsi_scene::check;
 use omsi_platform::discord;
 #[cfg(steam)]
 mod steam;
 use omsi_lan::voice;
-mod head_idle;
+pub(crate) use omsi_scene::head_idle;
 use omsi_input::headtrack;
 #[cfg(windows)]
 use omsi_xr::openxr;
@@ -35,7 +35,7 @@ mod platform;
 mod touch;
 mod units;
 mod placing;
-mod mt;
+use omsi_mt as mt;
 use omsi_platform::updater;
 mod update_watch;
 use omsi_platform::presence;
@@ -46,17 +46,17 @@ use omsi_scene::camera_arm;
 use omsi_vehicle::cam_approach;
 use omsi_career::career;
 use omsi_input::describe;
-mod editor;
+pub(crate) use omsi_scene::editor;
 mod duty_book;
 mod game_lists;
 mod game_panels;
 mod game_controller_menu;
 mod rail_drive;
 use omsi_scene::driver;
-mod export;
-mod hud;
+use omsi_scene::export;
+pub(crate) use omsi_scene::hud;
 mod humans;
-mod journey;
+use omsi_career::journey;
 use omsi_input::keys;
 // (LAN play: the session is omsi-lan's `game`, see `lan_play`; the shared world's mirror
 // stays here: it drives the app's `Traffic`, `Humans` and their view directly)
@@ -67,7 +67,7 @@ use omsi_scene::lights;
 mod launcher;
 mod menu;
 mod mirror_hud;
-mod navigator;
+use omsi_navigator as navigator;
 mod vr_navigator;
 use omsi_scene::money;
 mod radio;
@@ -79,7 +79,16 @@ use omsi_scene::{rain, window_wipers};
 mod scene;
 mod season_phase;
 mod schedule;
-mod schedule_paper;
+/// The cab's paper timetable (`omsi_scene::schedule_paper`) in the game's language.
+mod schedule_paper {
+    pub(crate) fn update_vehicle(
+        vehicle: &mut omsi_sim::VehicleInstance,
+        duty: &omsi_sim::timetable_run::PlayerDuty,
+        fonts: &mut omsi_sim::texttex::FontLibrary,
+    ) -> anyhow::Result<()> {
+        omsi_scene::schedule_paper::update_vehicle(vehicle, duty, fonts, || crate::settings::Settings::load().language)
+    }
+}
 mod real_time;
 mod settings;
 mod shell;
@@ -87,7 +96,7 @@ mod photo;
 mod devtools;
 mod telemetry;
 use omsi_scene::threads;
-mod tiles;
+use omsi_scene::tiles;
 mod traffic;
 mod view_sync;
 mod ui;
@@ -114,7 +123,7 @@ mod launcher_link;
 use omsi_lan::mods as lan_mods;
 mod memory;
 mod offscreen;
-mod ground_gap;
+pub(crate) use omsi_sim::ground_gap;
 mod on_foot;
 use omsi_scene::route_arrows;
 mod server;
@@ -131,8 +140,9 @@ mod spawn;
 use omsi_input::stock_keys;
 mod startup;
 mod traffic_link;
-mod tutorial;
+pub(crate) use omsi_content::tutorial;
 mod weather_setup;
+mod weather_tomorrow;
 use omsi_weather::{weather_cycle, weather_model};
 mod world_load;
 
@@ -213,10 +223,11 @@ pub fn run() -> Result<()> {
     restart_with_allocator_settings();
     #[cfg(windows)]
     attach_parent_console();
-    // `--check-vehicle <file>`: the loaders' findings as JSON, no window, no log
-    if std::env::args().nth(1).as_deref() == Some("--check-vehicle") {
+    // `--check <file or folder>` (`--check-vehicle`, its old name): the loaders' findings
+    // as JSON, no window, no log
+    if matches!(std::env::args().nth(1).as_deref(), Some("--check" | "--check-vehicle")) {
         let rest: Vec<String> = std::env::args().skip(2).collect();
-        return check::run(&rest);
+        return check::run(&rest, crate::startup::find_root);
     }
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     // a panic goes into the log (which the launcher keeps per session) with where it
@@ -400,6 +411,12 @@ pub(crate) fn prepare(mut args: Args, bare: bool) -> Result<Option<(Args, Option
 /// The game for `args`, ready for its window; None when there is no window to open (a
 /// picture or a model was written instead).
 pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) -> Result<Option<App>> {
+    // the window's simulation beside the picture or inline, for the whole session (an
+    // offscreen run - a dedicated server, a picture - steps inline and never asks)
+    if args.offscreen.is_none() {
+        let sim_thread = omsi_sim::sim_thread::set_enabled(settings::Settings::load().sim_thread);
+        log::info!("sim thread: {}", if sim_thread { "the AI traffic, the people and the scenery scripts step beside the picture" } else { "off: every step on the main thread" });
+    }
     let _lan_status = lan::StatusFileGuard;
     // OMSI's tutorials: the lesson's own situation
     if let Some(n) = args.tutorial.filter(|n| (1..=4).contains(n)) {
@@ -623,6 +640,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             metar_rx: None,
             metar_once: false,
             metar_next: 0.0,
+            tomorrow: Default::default(),
             sky,
         },
         menus: MenuState {
@@ -657,6 +675,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             admin_list: None,
             list_kind: None,
             key_capture: None,
+            ctrl_add_action: false,
             menu_prev_pause: false,
             info_bar,
             timetable: false,
@@ -714,7 +733,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             profile_mark: None,
             frame_times: Vec::new(),
             frame_stages: Vec::new(),
-            overlay: Default::default(),
+            overlay: crate::perf_overlay::new(),
             texture_cut_at: None,
         },
         sound: SoundState {
@@ -741,6 +760,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             both_drag: None,
             clock_hold: 0.0,
             pad_look: [false; 4],
+            pad_repeat: Vec::new(),
             pad_voice_radio: false,
             arrow_glance: false,
             headtrack: None,
