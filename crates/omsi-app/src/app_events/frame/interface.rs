@@ -158,6 +158,10 @@ impl App {
         }
         self.menus.note_watch.frame(dt, &said, &mut self.menus.notices);
         self.integrations.update_watch.tick(&mut self.menus.notices);
+        if let Some((before, text, left)) = omsi_lan::mods::upload::notice() {
+            self.menus.notices.retain(|n| n.text != before);
+            crate::ui::push_notice(&mut self.menus.notices, crate::ui::Notice { kind: crate::ui::NoticeKind::Info, text, left, total: left });
+        }
         for n in self.menus.notices.iter_mut() {
             n.left -= dt;
         }
@@ -287,6 +291,7 @@ impl App {
                 stop_requested: p.is_some_and(|p| navigator::stop_requested(&p.vehicle)),
                 time: self.clock.time,
                 weekday: self.clock.weekday(),
+                date: self.clock.date_code(),
                 language: &self.settings.language,
                 screen: if vr_active {
                     (1440.0, 1440.0)
