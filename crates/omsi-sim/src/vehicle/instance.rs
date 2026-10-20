@@ -252,6 +252,7 @@ impl VehicleInstance {
                 .flat_map(|i| [format!("PAX_Entry{i}_Req"), format!("PAX_Exit{i}_Req"), format!("PAX_Entry{i}_Busy"), format!("PAX_Exit{i}_Busy")])
                 .filter_map(|n| v(&n))
                 .collect(),
+            v_cables: control_cables(&ty),
             v_accel: [v("A_Trans_X"), v("A_Trans_Y"), v("A_Trans_Z")],
             v_wheels,
             ty,
@@ -271,6 +272,7 @@ impl VehicleInstance {
             ground: None,
             trailers: Vec::new(),
             skin_rest: Vec::new(),
+            skin_plans: SkinPlans::default(),
             collision: None,
             dynamic_boxes: Vec::new(),
             dynamic_impacts: Vec::new(),
@@ -443,4 +445,14 @@ impl VehicleInstance {
             }
         }
     }
+}
+
+pub(super) fn control_cables(ty: &VehicleType) -> Vec<(omsi_script::VarId, omsi_script::VarId)> {
+    let v = |name: &str| ty.program.var(name);
+    let mut cables: Vec<_> = ty.def.control_cable_front.iter().chain(&ty.def.control_cable_back)
+        .filter_map(|c| Some((v(c.lines.get(3)?)?, v(c.lines.get(2)?)?)))
+        .collect();
+    cables.sort_unstable();
+    cables.dedup();
+    cables
 }

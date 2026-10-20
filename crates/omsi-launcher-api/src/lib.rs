@@ -33,6 +33,11 @@ pub trait Platform: Send + Sync {
         None
     }
     fn before_update(&self) {}
+    /// What ended the last game run, when it crashed and no launcher was there to see it
+    /// (Android: the app itself went down with the game): what happened and the log's end.
+    fn previous_run_crash(&self) -> Option<(String, String)> {
+        None
+    }
     fn quit(&self) {}
 }
 
@@ -59,7 +64,11 @@ fn bootstrap(p: &dyn Platform) -> Answer {
     let choice: Value = std::fs::read_to_string(core::data_dir().join("launcher-duty.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
     let favourites: Vec<String> = std::fs::read_to_string(core::data_dir().join("favourite-buses.txt")).map(|t| t.lines().map(str::trim).filter(|l| !l.is_empty()).map(|l| l.replace('\\', "/").to_lowercase()).collect()).unwrap_or_default();
     let languages: Vec<Value> = core::LANGUAGES.iter().map(|(code, name, iso, _)| json!({ "code": code, "name": name, "iso": iso })).collect();
+    // (a crash the last run left behind with nobody to tell: shown at the start, as the
+    // game's own launcher did)
+    let crash = p.previous_run_crash().map(|(what, tail)| crash_json(&what, &tail));
     Ok(json!({
+        "crash": crash,
         "version": omsi_platform::VERSION,
         "platform": std::env::consts::OS,
         "config": config,
@@ -176,8 +185,8 @@ fn lines(map: String, date: String) -> Answer {
     to_json(core::list_lines(&map, &date).map_err(err)?)
 }
 
-fn ibis(bus: String, hof: String, line: String) -> Answer {
-    to_json(core::ibis_info(&bus, &hof, &line).map_err(err)?)
+fn ibis(bus: String, hof: String, line: String, terminus: Option<String>, stops: Option<Vec<String>>) -> Answer {
+    to_json(core::ibis_info(&bus, &hof, &line, &terminus.unwrap_or_default(), &stops.unwrap_or_default()).map_err(err)?)
 }
 
 /// The depot file the duty would use (see `core::default_hof`).
@@ -393,8 +402,13 @@ pub fn game_ended(game: &core::instances::Instance) -> Option<(&'static str, Val
         return Some(("game-disconnected", json!({ "why": why })));
     }
     let (what, tail) = core::crash::crash_of(log)?;
+    Some(("game-crashed", crash_json(&what, &tail)))
+}
+
+/// A crash as the page's crash dialog takes it.
+fn crash_json(what: &str, tail: &str) -> Value {
     let silent = what.contains("closed without a word");
-    Some(("game-crashed", json!({
+    json!({
         "what": what,
         "tail": tail,
         "gap": core::crash::CRASH_TAIL_GAP,
@@ -403,7 +417,7 @@ pub fn game_ended(game: &core::instances::Instance) -> Option<(&'static str, Val
         "vulkan": silent && core::crash::died_compiling_on_vulkan(&tail),
         "version": omsi_platform::VERSION,
         "os": std::env::consts::OS,
-    })))
+    })
 }
 
 fn game_log(pid: u32, lines: Option<usize>) -> Answer {
@@ -779,7 +793,7 @@ pub fn call(cmd: &str, args: &Value, p: &dyn Platform) -> Answer {
         "custom_weather" => custom_weather(arg::<String>(args, "weather")?),
         "custom_weather_text" => custom_weather_text(arg::<Value>(args, "custom")?),
         "lines" => lines(arg::<String>(args, "map")?, arg::<String>(args, "date")?),
-        "ibis" => ibis(arg::<String>(args, "bus")?, arg::<String>(args, "hof")?, arg::<String>(args, "line")?),
+        "ibis" => ibis(arg::<String>(args, "bus")?, arg::<String>(args, "hof")?, arg::<String>(args, "line")?, arg::<Option<String>>(args, "terminus")?, arg::<Option<Vec<String>>>(args, "stops")?),
         "default_hof" => default_hof(arg::<Value>(args, "map")?, arg::<Value>(args, "bus")?, arg::<String>(args, "date")?, arg::<Option<String>>(args, "line")?),
         "saved_situations" => saved_situations(arg::<String>(args, "map")?),
         "delete_situation" => delete_situation(arg::<String>(args, "map")?, arg::<String>(args, "file")?),

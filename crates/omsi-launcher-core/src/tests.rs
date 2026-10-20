@@ -148,6 +148,17 @@ fn mirror_refresh_survives_the_launcher() {
 }
 
 #[test]
+fn mirror_hud_survives_the_launcher() {
+    assert_eq!(settings_from_text(None)["mirror_hud"], 0);
+    for (word, kept) in [("0", 0), ("3", 3), ("7", 7), ("9", 7), ("x", 0)] {
+        let v = settings_from_text(Some(&format!("mirror_hud={word}\n")));
+        assert_eq!(v["mirror_hud"], kept, "{word}");
+        let text = settings_to_text(&v, Some("mirror_hud=1\n"));
+        assert_eq!(text.lines().filter(|l| l.starts_with("mirror_hud=")).collect::<Vec<_>>(), [format!("mirror_hud={kept}")], "{text}");
+    }
+}
+
+#[test]
 fn mirror_hud_every_frame_survives_the_launcher() {
     assert_eq!(settings_from_text(None)["mirror_hud_every_frame"], false);
     for (word, on) in [("1", true), ("0", false)] {
@@ -423,6 +434,15 @@ fn dates_are_fitted_to_the_maps_year_span() {
     assert_eq!(span((2010, 0)), Some((2010, i32::MAX)));
     assert_eq!(span((2010, 2004)), Some((2010, i32::MAX)), "a last year before the first");
     assert_eq!(span((1972, 1989)), Some((1972, 1989)));
+}
+
+/// A date the player chose keeps its year; only the machine's calendar is fitted to the
+/// map's `[years]`.
+#[test]
+fn a_chosen_duty_date_keeps_its_year() {
+    let span = Some((1986, 2000));
+    assert_eq!(date_for_game("2025-06-01", false, span), "2025-06-01");
+    assert_eq!(date_for_game("2025-06-01", true, span), "2000-06-01");
 }
 
 #[test]

@@ -803,6 +803,17 @@ pub fn fit_date_to_years(date: &str, span: Option<(i32, i32)>) -> String {
     format!("{year:04}-{month:02}-{day:02}")
 }
 
+/// The `--date` of a duty: the date the player chose as it stands. Only a date taken from
+/// the machine's calendar (`use_real_date`) is fitted to the map's `[years]` - an old saved
+/// duty or a manually picked year must not be moved behind the player's back.
+fn date_for_game(date: &str, real_date: bool, span: Option<(i32, i32)>) -> String {
+    if real_date {
+        fit_date_to_years(date, span)
+    } else {
+        date.to_string()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EntryInfo {
     pub index: i32,
@@ -1618,6 +1629,7 @@ pub struct IbisInfo {
     pub hof: String,
     pub line_code: String,
     pub routes: Vec<IbisRoute>,
+    pub trip_route: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -1629,7 +1641,7 @@ pub struct IbisRoute {
     pub terminus: String,
 }
 
-pub fn ibis_info(bus: &str, hof_name: &str, line: &str) -> Result<IbisInfo> {
+pub fn ibis_info(bus: &str, hof_name: &str, line: &str, terminus: &str, stops: &[String]) -> Result<IbisInfo> {
     let bus_path = resolve_content(bus)?;
     let dir = bus_path.parent().context("bus folder")?;
     // the bus's own depot file of that name (every content root's copy of its folder), else
@@ -1650,7 +1662,9 @@ pub fn ibis_info(bus: &str, hof_name: &str, line: &str) -> Result<IbisInfo> {
         let terminus = hof.termini.iter().find(|x| x.code == code).and_then(|x| x.strings.first().cloned()).unwrap_or_default();
         routes.push(IbisRoute { code: t.code.clone(), route: t.route.clone(), name: t.name.clone(), terminus_code: code, terminus });
     }
-    Ok(IbisInfo { hof: hof.name.clone(), line_code: line_digits, routes })
+    let stops: Vec<&str> = stops.iter().map(String::as_str).collect();
+    let trip_route = (!terminus.trim().is_empty()).then(|| omsi_vehicle::hof::trip_terminus(hof, line, terminus, &stops)).flatten().and_then(|(_, r)| r).map(|r| hof.info_trips[r].code.clone());
+    Ok(IbisInfo { hof: hof.name.clone(), line_code: line_digits, routes, trip_route })
 }
 
 // ---------------------------------------------------------------------------------------
@@ -2011,6 +2025,15 @@ pub fn graphics_presets_for(mode: &str) -> [(&'static str, Value); 4] {
     })
 }
 
+/// Normalize vehicle smoke visibility for the game, launcher and saved profiles.
+pub fn vehicle_smoke(x: &str) -> &'static str {
+    match x.trim().to_ascii_lowercase().as_str() {
+        "player" | "player_only" => "player",
+        "off" | "none" => "off",
+        _ => "all",
+    }
+}
+
 /// The wet roads' reflections: `off` or `low`, else `high` (as the game reads its `puddles`).
 pub fn puddles(x: &str) -> &'static str {
     match x.trim().to_ascii_lowercase().as_str() { "off" | "0" | "none" => "off", "low" => "low", _ => "high" }
@@ -2067,6 +2090,7 @@ pub fn settings_from_text(text: Option<&str>) -> Value {
 pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
     let mut v = json!({ "msaa": 4, "anisotropy": 8, "ssao": true, "shadows": true, "shadow_size": 2048, "navigator": true, "ui_opacity": 0.85, "navigator_corner": "bottom-left", "boarding": "auto", "detail_textures": true, "exact_fare": true, "enhanced": false, "graphics": "vanilla_plus", "fullscreen": false, "vsync": true, "volume": 0.6, "drive_keys": "simple", "render_scale": "auto", "view_distance": "auto", "language": "ENG", "video_memory": 0, "texture_compression": true, "gpu_texture_compression": true, "chat": true, "tooltips": true, "name_tags": true, "show_fps": false, "clouds": true, "cloud_quality": "high", "rain_quality": "high", "pax_density": 1.0, "vol_ai": 1.0, "vol_scenery": 1.0, "ambient": true, "vol_ambient": 0.8, "mirror_size": 256, "doppler": true, "driver": true, "max_fps": 0, "min_obj_size": 0.013, "max_obj_dist": "auto" });
     v["puddles"] = json!("high"); // (apart: the literal above is at the json! macro's recursion limit)
+    v["vehicle_smoke"] = json!("all");
     if phone {
         for (k, d) in [("msaa", json!(2)), ("anisotropy", json!(4)), ("ssao", json!(false)), ("shadow_size", json!(1024)), ("mirror_size", json!(128)), ("max_fps", json!(60)), ("max_obj_dist", json!("900")), ("pax_density", json!(0.7)), ("navigator_corner", json!("top-center"))] {
             v[k] = d;
@@ -2118,6 +2142,7 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
     v["windy_trees"] = json!(true);
     v["sim_thread"] = json!(false); // (switched in the game's Display menu, saved through this writer)
     v["mirror_hud_every_frame"] = json!(false);
+    v["mirror_hud"] = json!(0);
     // an early timetable bus waits only at the stops the timetable times (off: at every
     // stop, as in OMSI; #1773)
     v["ai_wait_timed_stops_only"] = json!(false);
@@ -2181,6 +2206,7 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
             "mirror_quality" => v[&k] = json!(mirror_quality(val)),
             "cloud_quality" => v[&k] = json!(cloud_quality(val)),
             "rain_quality" => v[&k] = json!(rain_quality(val)),
+            "vehicle_smoke" => v[&k] = json!(vehicle_smoke(val)),
             "puddles" => v[&k] = json!(puddles(val)),
             "gpu_texture_compression" => v[&k] = json!(!matches!(val.trim().to_ascii_lowercase().as_str(), "0" | "off" | "no" | "false" | "disabled")),
             "max_fps" => v[&k] = json!(val.parse::<f64>().map(|x| x as i64).unwrap_or(0)),
@@ -2250,6 +2276,7 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
             "info_bar" => v[&k] = json!(b(val)),
             "perf_overlay" => v[&k] = json!(perf_overlay_mode(val)),
             "sim_thread" => v[&k] = json!(b(val)),
+            "mirror_hud" => v[&k] = json!(val.trim().parse::<u8>().map(|x| x.min(7)).unwrap_or(0)),
             "windy_trees" | "mirror_hud_every_frame" | "ai_wait_timed_stops_only" | "pax_bad_driving" | "ambient" => v[&k] = json!(b(val)),
             "time_speed" => v[&k] = json!(val.trim_start_matches(['x', 'X']).parse::<f64>().map(|x| x.clamp(1.0, 30.0)).map(|x| if x.fract() == 0.0 { format!("{}", x as i64) } else { x.to_string() }).unwrap_or_else(|_| "1".into())),
             "language" => v[&k] = json!(language_code(val)),
@@ -2361,8 +2388,8 @@ pub fn save_settings(v: &Value) -> Result<()> {
 
 /// The settings a graphics profile holds: what the Graphics tab shows, except the machine's
 /// own (fullscreen, graphics API).
-pub const GRAPHICS_PROFILE_KEYS: [&str; 31] = [
-    "graphics", "msaa", "render_scale", "anisotropy", "shadow_size", "ssao", "shadows", "shadow_casters", "detail_textures", "night_brightness", "led_glow", "led_mips", "shadow_blobs", "reflections", "clouds", "cloud_quality", "rain_quality", "puddles", "windy_trees",
+pub const GRAPHICS_PROFILE_KEYS: [&str; 32] = [
+    "graphics", "msaa", "render_scale", "anisotropy", "shadow_size", "ssao", "shadows", "shadow_casters", "detail_textures", "night_brightness", "led_glow", "led_mips", "shadow_blobs", "reflections", "clouds", "cloud_quality", "rain_quality", "vehicle_smoke", "puddles", "windy_trees",
     "vsync", "max_fps", "view_distance", "max_obj_dist", "min_obj_size", "mirror_size", "mirror_refresh", "mirror_quality", "mirror_hud_every_frame", "video_memory", "texture_compression", "gpu_texture_compression",
 ];
 
@@ -2606,6 +2633,7 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
     text.push_str(&format!("gpu_texture_compression={}\n", b("gpu_texture_compression", true)));
     text.push_str(&format!("cloud_quality={}\n", cloud_quality(v.get("cloud_quality").and_then(|x| x.as_str()).unwrap_or("high"))));
     text.push_str(&format!("rain_quality={}\n", rain_quality(v.get("rain_quality").and_then(|x| x.as_str()).unwrap_or("high"))));
+    text.push_str(&format!("vehicle_smoke={}\n", vehicle_smoke(v.get("vehicle_smoke").and_then(|x| x.as_str()).unwrap_or("all"))));
     text.push_str(&format!("puddles={}\n", puddles(v.get("puddles").and_then(|x| x.as_str()).unwrap_or("high"))));
     text.push_str(&format!("mirror_refresh={}\n", mirror_refresh(v.get("mirror_refresh").and_then(|x| x.as_str()).unwrap_or("full"))));
     text.push_str(&format!("mirror_quality={}\n", mirror_quality(v.get("mirror_quality").and_then(|x| x.as_str()).unwrap_or("standard"))));
@@ -2619,6 +2647,7 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
     text.push_str(&format!("windy_trees={}\n", b("windy_trees", true)));
     text.push_str(&format!("sim_thread={}\n", b("sim_thread", false)));
     text.push_str(&format!("mirror_hud_every_frame={}\n", b("mirror_hud_every_frame", false)));
+    text.push_str(&format!("mirror_hud={}\n", n("mirror_hud", 0).clamp(0, 7)));
     text.push_str(&format!("standing_chance={}\n", n("standing_chance", 5).clamp(0, 100)));
     text.push_str(&format!("ambient={}\nvol_ambient={}\n", b("ambient", true), f("vol_ambient", 0.8).clamp(0.0, 1.0)));
     text.push_str(&format!("radio_speaker={}\nradio_hiss={}\nradio_dropouts={}\n", f("radio_speaker", 0.0).clamp(0.0, 1.0), f("radio_hiss", 0.0).clamp(0.0, 1.0), f("radio_dropouts", 0.0).clamp(0.0, 1.0)));
@@ -2949,12 +2978,17 @@ fn duty_args_for_root(d: &Duty, root: &Path) -> Result<Vec<String>> {
         date = Some(format!("{year:04}-{mo:02}-{dd:02}"));
     }
     if let Some(dt) = date {
-        // (a date outside the map's [years] starts on a day inside them, as OMSI 2 does: the
-        // machine's calendar or an old saved duty would load a map without its buses)
-        let file = root.join(&d.map);
-        let file = if file.is_file() { file } else { resolve_content(&d.map).unwrap_or(file) };
-        let span = omsi_map::GlobalCfg::load(&file).ok().and_then(|g| year_span_of(&g));
-        a.extend(["--date".into(), fit_date_to_years(&dt, span)]);
+        // (only the machine's calendar is fitted to the map's [years], so that its AI lists,
+        // chrono and timetables fit; the date the player chose in the launcher stays)
+        let real_date = on("use_real_date");
+        let span = if real_date {
+            let file = root.join(&d.map);
+            let file = if file.is_file() { file } else { resolve_content(&d.map).unwrap_or(file) };
+            omsi_map::GlobalCfg::load(&file).ok().and_then(|g| year_span_of(&g))
+        } else {
+            None
+        };
+        a.extend(["--date".into(), date_for_game(&dt, real_date, span)]);
     }
     if let Some(w) = d.weather.as_deref().filter(|x| !x.trim().is_empty()) {
         a.extend(["--weather".into(), w.trim().to_string()]);
@@ -3098,7 +3132,7 @@ pub fn cli(cmd: &str, arg: &str) -> Result<Value> {
         "vehicles" => serde_json::to_value(list_vehicles()?)?,
         "weather" => serde_json::to_value(list_weather()?)?,
         "lines" => serde_json::to_value(list_lines(&s("map"), &s("date"))?)?,
-        "ibis" => serde_json::to_value(ibis_info(&s("bus"), &s("hof"), &s("line"))?)?,
+        "ibis" => serde_json::to_value(ibis_info(&s("bus"), &s("hof"), &s("line"), &s("terminus"), &serde_json::from_value::<Vec<String>>(a.get("stops").cloned().unwrap_or_default()).unwrap_or_default())?)?,
         "profiles" => serde_json::to_value(list_profiles()?)?,
         "profile" => serde_json::to_value(get_profile(&s("name"))?)?,
         "mods" => {
