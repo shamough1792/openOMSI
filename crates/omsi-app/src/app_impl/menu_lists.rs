@@ -61,7 +61,7 @@ impl App {
             self.settings.metar_station=code.clone();
             crate::game_lists::remember_setting("metar_station",&code);
             self.session.metar_rx=None; self.session.metar_once=false; self.session.metar_next=0.0;
-            self.service_msg=Some((format!("METAR source: {code}"),3.0));
+            self.service_msg=Some((format!("{}: {code}", omsi_ui::tr("METAR source")),3.0));
         }else if !code.is_empty(){self.service_msg=Some(("ICAO must be exactly 4 letters".into(),3.0));}
         self.refresh_list();
     }
@@ -209,7 +209,7 @@ impl App {
                 let t = self.clock.time;
                 let day_start = t - t.rem_euclid(86400.0);
                 self.shift_clock(day_start + (h * 3600 + m * 60 + sec) as f64 - t);
-                self.service_msg = Some((format!("Clock: {:02}:{:02}:{:02}", h, m, sec), 3.0));
+                self.service_msg = Some((omsi_ui::tr("Clock: {}").replacen("{}", &format!("{:02}:{:02}:{:02}", h, m, sec), 1), 3.0));
             }
         }
         self.refresh_list();

@@ -351,7 +351,7 @@ impl App {
             if !p.shift_gate_to(to) {
                 return false;
             }
-            self.service_msg = Some((format!("Gear {}", match to { 0 => "N".to_string(), -1 => "R".to_string(), n => n.to_string() }), 1.5));
+            self.service_msg = Some((omsi_ui::tr("Gear {}").replacen("{}", &match to { 0 => "N".to_string(), -1 => "R".to_string(), n => n.to_string() }, 1), 1.5));
             return true;
         }
         let Some(n) = names.iter().find(|n| p.vehicle.ty.program.trigger(n).is_some()) else {
@@ -425,7 +425,7 @@ impl App {
         let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let path = dir.join(format!("omsi_{secs}.png"));
         if !cfg!(target_os = "android") {
-            self.service_msg = Some((format!("Screenshot: {}", path.display()), 4.0));
+            self.service_msg = Some((omsi_ui::tr("Screenshot: {}").replacen("{}", &path.display().to_string(), 1), 4.0));
         }
         self.perf.shot = Some((path, false));
     }

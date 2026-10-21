@@ -166,7 +166,7 @@ pub(super) fn switch_driver(app: &mut App, name: &str) {
     next.go_on_from(&mut app.session.career);
     app.session.career = next;
     app.args.driver = Some(rel);
-    app.service_msg = Some((format!("Driver: {name}"), 3.0));
+    app.service_msg = Some((omsi_ui::tr("Driver: {name}").replace("{name}", &name), 3.0));
 }
 
 /// The fleet numbers of the bus's `[number]` list with their registrations.

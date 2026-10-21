@@ -15501,7 +15501,7 @@ _version: 2
   ja: "行路を終了"
   zh: "结束行程"
   hi: "टूर समाप्त करें"
-  zh-tw: "結束行程"
+  zh-tw: "結束更次"
   sv: "Avsluta omloppet"
   sr: "Završite obilazak"
 "No active route":
@@ -16395,13 +16395,13 @@ _version: 2
   ja: "系統と行路..."
   zh: "线路与行程..."
   hi: "लाइन और टूर..."
-  zh-tw: "路線與班次..."
+  zh-tw: "路線與更次..."
   sv: "Linje och omlopp..."
   sr: "Linija i obilazak..."
 
 "Line and tour":
   ca: "Línia i torn"
-  zh-tw: "路線與班次"
+  zh-tw: "路線與更次"
   pt: "Linha e escala"
   pt-pt: "Linha e escala"
   ru: "Маршрут и выход"
@@ -23944,7 +23944,7 @@ _version: 2
   ja: "運行をクリックすると、その運行から勤務を始めます。"
   zh: "点击一趟行程，从那里开始该班次。"
   hi: "ड्यूटी वहीं से शुरू करने के लिए किसी ट्रिप पर क्लिक करें।"
-  zh-tw: "點選一趟行程，從那裡開始該班次。"
+  zh-tw: "點選一個班次，從該班次開始執行更次。"
   ko: "운행을 클릭하면 그 운행부터 근무를 시작합니다."
   th: "คลิกเที่ยวเพื่อเริ่มกะจากเที่ยวนั้น"
   vi: "Nhấp vào một chuyến để bắt đầu ca từ chuyến đó."
@@ -24139,7 +24139,7 @@ _version: 2
   zh: "将当前画质保存为预设方案"
   pl: "Zapisz bieżące ustawienia grafiki jako profil"
   fr: "Enregistrer les graphismes actuels comme profil"
-  zh-tw: "將目前圖形儲存為設定檔"
+  zh-tw: "將目前圖像設定儲存為設定檔"
   nl: "Huidige grafische instellingen als profiel opslaan"
   sv: "Spara nuvarande grafik som profil"
   de: "Aktuelles Grafikprofil speichern"
@@ -24184,7 +24184,7 @@ _version: 2
   zh: "动态转向(高速时按键转向变慢,OMSI 的 redSteerSpd)"
   pl: "Dynamiczne kierowanie (wolniejsze klawisze przy prędkości, redSteerSpd z OMSI)"
   fr: "Direction dynamique (touches plus lentes en vitesse, redSteerSpd d'OMSI)"
-  zh-tw: "動態轉向（速度較慢的按鍵，OMSI 的 redSteerSpd）"
+  zh-tw: "動態轉向（高速時減慢按鍵轉向，OMSI 的 redSteerSpd）"
   nl: "Dynamisch sturen (tragere toetsen bij hogere snelheid, OMSI's redSteerSpd)"
   sv: "Dynamisk styrning (långsammare tangenter vid hög fart, OMSI:s redSteerSpd)"
   de: "Dynamische Lenkung (langsameres Lenken bei Geschwindigkeit, redSteerSpd von OMSI)"
@@ -24259,7 +24259,7 @@ _version: 2
   zh: "时间流速(多人游戏中或实时同步时不可用)"
   pl: "Prędkość czasu (niedostępna w multiplayer ani przy synchronizacji z czasem rzeczywistym)"
   fr: "Vitesse du temps (sauf en multijoueur ou avec la synchro en temps réel)"
-  zh-tw: "時間速度（不在多人遊戲或即時同步中可用）"
+  zh-tw: "時間速度（多人遊戲或啟用即時同步時無法調整）"
   nl: "Tijdsnelheid (niet in multiplayer of bij realtime synchronisatie)"
   sv: "Tidshastighet (inte i flerspelarläge eller med tidssynkronisering)"
   de: "Zeitmultiplikator (nicht im Mehrspieler oder mit Echzeit-Synchronisation)"
@@ -24626,7 +24626,7 @@ _version: 2
   zh: "开始班次"
   pl: "Rozpocznij kurs"
   fr: "Commencer la course"
-  zh-tw: "開始旅程"
+  zh-tw: "開始班次"
   nl: "Rit starten"
   sv: "Starta tur"
   sr: "Započnite putovanje"
@@ -24867,7 +24867,7 @@ _version: 2
   zh: "显示所有站点的列表(仅在进行行程时)"
   pl: "Wyświetla listę wszystkich przystanków (tylko gdy brygada jest aktywna)"
   fr: "Affiche la liste de tous les arrêts (seulement pendant un service)"
-  zh-tw: "顯示所有站點的清單（僅當遊覽處於活動狀態時）"
+  zh-tw: "顯示所有站點的清單（僅限執行更次時）"
   nl: "Toont alle haltes (alleen tijdens een actieve rit)"
   sv: "Visar en lista över alla hållplatser (endast med aktivt omlopp)"
   sr: "Prikazuje listu svih stanica (samo kada je obilazak aktivan)"
@@ -24997,7 +24997,7 @@ _version: 2
   zh: "保留 LED 遮罩的 mipmap 链(远处更平滑)。"
   pl: "Zachowuje łańcuch mipmap masek LED (gładszy obraz z daleka)."
   fr: "Garde la chaîne de mipmaps des masques LED (plus lisse de loin)."
-  zh-tw: "保持 LED 面罩的 mip 鏈（從遠處看更平滑）。"
+  zh-tw: "保留 LED 遮罩的 mipmap 層級（從遠處看更平滑）。"
   nl: "Behoud de mipmapniveaus van LED-maskers (vloeiender vanop afstand)."
   sv: "Behåll LED-maskernas mip-kedja (mjukare på avstånd)."
   sr: "Držite mip lanac LED maski (glađi sa udaljenosti)."
@@ -25213,7 +25213,7 @@ _version: 2
   zh: "视角随转向转动"
   pl: "Widok obraca się ze skrętem kierownicy"
   fr: "La vue suit la direction"
-  zh-tw: "透過轉向查看轉彎"
+  zh-tw: "視角隨轉向轉動"
   nl: "Beeld draait mee met het stuur"
   sv: "Vyn vrids med styrningen"
   sr: "Pogled na okrete sa upravljanjem"
@@ -25423,7 +25423,7 @@ _version: 2
   zh: "将座椅恢复到车辆设定的位置。"
   pl: "Przywraca siedzenie do położenia zdefiniowanego przez pojazd."
   fr: "Remet le siège à la position du véhicule."
-  zh-tw: "將座椅靠背放在車輛有的位置。"
+  zh-tw: "將座椅位置與視角恢復為此車輛的預設值。"
   nl: "Zet de stoel terug op de standaardpositie van het voertuig."
   sv: "Återställ sätet till fordonets ursprungliga position."
   sr: "Vratite sedište tamo gde ga ima vozilo."
@@ -25493,7 +25493,7 @@ _version: 2
   zh: "高速时转向按键作用变慢"
   pl: "Klawisze kierowania działają wolniej przy prędkości"
   fr: "Les touches de direction agissent plus lentement en vitesse"
-  zh-tw: "加速時轉向鍵動作變慢"
+  zh-tw: "車速較高時，按鍵轉向速度會減慢"
   nl: "Stuurtoetsen reageren trager bij hogere snelheid"
   sv: "Styrtangenterna verkar långsammare vid hög fart"
   sr: "Tasteri upravljača deluju sporije pri brzini"
@@ -25633,7 +25633,7 @@ _version: 2
   zh: "在本机上翻译尚无译文的文本"
   pl: "Tłumaczy na tym komputerze teksty, których nikt jeszcze nie przetłumaczył"
   fr: "Traduit sur cette machine les textes que personne n'a traduits"
-  zh-tw: "在這台機器上沒有翻譯過的文本"
+  zh-tw: "在本機翻譯尚無譯文的文字"
   nl: "Vertaalt onvertaalde teksten lokaal op deze computer"
   sv: "Översätter texter som ingen har översatt, på denna dator"
   sr: "Prevodi tekstove koje niko nije preveo na ovoj mašini"
@@ -25703,7 +25703,7 @@ _version: 2
   zh: "显示车辆无法移动的原因、应找的零钱以及某项服务做了什么"
   pl: "Dlaczego pojazd nie rusza, należna reszta, co zrobiła obsługa serwisowa"
   fr: "Pourquoi le véhicule n'avance pas, la monnaie à rendre, ce qu'a fait un service"
-  zh-tw: "為什麼車輛不動、應更換、服務做了什麼"
+  zh-tw: "車輛無法行駛的原因、應找零金額及車輛服務的結果"
   nl: "Waarom het voertuig niet rijdt, verschuldigd wisselgeld en uitgevoerde handelingen"
   sv: "Varför fordonet inte rör sig, växel att ge tillbaka och resultatet av service"
   sr: "Zašto se vozilo ne pomera, promena zbog, šta je uradio servis"
@@ -25759,7 +25759,7 @@ _version: 2
   zh: "接管世界中停放的另外一辆车"
   pl: "Przejmij kierownicę innego pojazdu stojącego w świecie"
   fr: "Prendre le volant d'un autre véhicule présent dans le monde"
-  zh-tw: "抓住世界上另一輛車的方向盤"
+  zh-tw: "接手駕駛場景中的另一輛車"
   nl: "Neem het stuur over van een ander voertuig in de wereld"
   sv: "Ta över ratten i ett annat fordon som står i världen"
   sr: "Sedite za volan drugog vozila koje stoji na svetu"
@@ -26950,7 +26950,7 @@ _version: 2
   ca: "Mapa i servei"
   de: "Karte & Dienst"
   zh: "地图与任务"
-  zh-tw: "地圖設定"
+  zh-tw: "地圖與更次"
   pl: "Mapa i służba"
   fr: "Carte et service"
   pt: "Mapa e escala"
@@ -26979,7 +26979,7 @@ _version: 2
   ca: "Amaga el full de ruta (en triar un torn torna a aparèixer)"
   de: "Fahrplan weglegen (eine Tour holt ihn zurück)"
   zh: "收起路书（选一个班次会再打开）"
-  zh-tw: "收起路書（選一個班次會再打開）"
+  zh-tw: "收起路書（選擇更次後會再次顯示）"
   pl: "Schowaj książkę drogową (wybranie brygady przywraca ją)"
   fr: "Ranger la feuille de route (choisir un service la fait revenir)"
   pt: "Ocultar o itinerário (escolher uma escala o exibe novamente)"
@@ -26993,7 +26993,7 @@ _version: 2
   ca: "El full de ruta: els trajectes del torn triat i les seves parades"
   de: "Der Fahrplan: die Fahrten der gewählten Tour und ihre Haltestellen"
   zh: "路书：所选班次的每一趟车和它停靠的站"
-  zh-tw: "路書：所選班次的每一趟車和它停靠的站"
+  zh-tw: "路書：所選更次的班次及各班次的停靠站"
   pl: "Książka drogowa: kursy wybranej brygady i przystanki, na których się zatrzymują"
   fr: "La feuille de route : les courses du service choisi et leurs arrêts"
   pt: "O itinerário: as viagens da escala escolhida e as paradas em que passam"
@@ -27104,7 +27104,7 @@ _version: 2
   sv: "Filtrera omlopp: nummer, rutt, hållplats..."
   sr: "Filtriraj obilaske: broj, ruta, stanica..."
 "Ended tours":
-  zh-tw: "已結束的班次"
+  zh-tw: "已結束的更次"
   ca: "Torns acabats"
   fr: "Services terminés"
   de: "Beendete Umläufe"
@@ -27161,7 +27161,7 @@ _version: 2
   it: "a corsa"
   nl: "per rit"
   zh: "每班次"
-  zh-tw: "一次旅行"
+  zh-tw: "一個班次"
   pt: "uma viagem"
   pt-pt: "uma viagem"
   sv: "en tur"
@@ -27958,7 +27958,7 @@ _version: 2
 "Enter any 4-letter ICAO station.":
   es: "Introduce cualquier estación ICAO de 4 letras."
   ca: "Introdueix qualsevol estació ICAO de 4 lletres."
-  zh-tw: "輸入任 4 個字母的 ICAO 電台。"
+  zh-tw: "輸入氣象站的四字母 ICAO 代碼。"
   fr: "Saisissez n'importe quel code OACI à 4 lettres."
   pt: "Digite qualquer estação ICAO de 4 letras."
   pt-pt: "Introduza qualquer estação ICAO de 4 letras."
@@ -28166,7 +28166,7 @@ _version: 2
 "Fetch the selected station again without waiting for the next automatic update.":
   es: "Vuelve a consultar la estación seleccionada sin esperar a la siguiente actualización automática."
   ca: "Torna a consultar l'estació seleccionada sense esperar la propera actualització automàtica."
-  zh-tw: "再次取得所選電台，無需等待下一次自動更新。"
+  zh-tw: "立即重新取得所選氣象站的報告，無需等待下一次自動更新。"
   fr: "Interroger à nouveau la station choisie sans attendre la prochaine mise à jour automatique."
   pt: "Consultar novamente a estação selecionada sem esperar pela próxima atualização automática."
   pt-pt: "Consultar novamente a estação selecionada sem esperar pela próxima atualização automática."
@@ -28456,7 +28456,7 @@ _version: 2
 "Load the selected station once without enabling continuous METAR sync.":
   es: "Carga la estación seleccionada una vez sin activar la sincronización METAR continua."
   ca: "Consulta l'estació seleccionada un cop sense activar la sincronització METAR contínua."
-  zh-tw: "載入所選電台一次，無需啟用連續 METAR 同步。"
+  zh-tw: "僅載入一次所選氣象站的報告，不啟用持續 METAR 同步。"
   fr: "Charger la station sélectionnée une fois sans activer la synchronisation METAR continue."
   pt: "Carregar a estação selecionada uma vez sem ativar a sincronização METAR contínua."
   pt-pt: "Carregar a estação selecionada uma vez sem ativar a sincronização METAR contínua."
@@ -29322,7 +29322,7 @@ _version: 2
   es: "Elige el turno"
   ca: "Tria el torn"
   fr: "Choisir le service"
-  zh-tw: "選擇班次"
+  zh-tw: "選擇更次"
   pt: "Escolha a escala"
   pt-pt: "Escolha a escala"
   zh: "选择班次"
@@ -30626,7 +30626,7 @@ _version: 2
   ru: "Диспетчерская забрала смену обратно: свободная езда"
 
 "End of the duty: the tour's last trip is done":
-  zh-tw: "勤務結束：此車次的最後一程已完成"
+  zh-tw: "更次結束：最後一個班次已完成"
   es: "Fin del servicio: se ha completado el último trayecto del turno"
   fr: "Fin du service : la dernière course est terminée"
   sv: "Tjänsten är slut: omloppets sista tur är klar"
@@ -31864,7 +31864,7 @@ _version: 2
   ru: "Стояночный тормоз включён  ({k} отпускает его)"
 
 "The tour starts at {}: the clock was moved from {from} to {}":
-  zh-tw: "車次於 {} 開始：時間已從 {from} 調整至 {}"
+  zh-tw: "更次於 {} 開始：時間已從 {from} 調整至 {}"
   es: "El turno empieza a las {}: el reloj ha pasado de {from} a {}"
   fr: "Le service commence à {} : l'horloge est passée de {from} à {}"
   sv: "Omloppet startar vid {}: klockan flyttades från {from} till {}"
@@ -49764,7 +49764,7 @@ _version: 2
 
 "No tour has a trip still to come that matches.":
   es: "Ningún turno tiene un trayecto pendiente que coincida."
-  zh-tw: "沒有符合條件且仍有未出發行程的班次。"
+  zh-tw: "沒有符合條件且仍有待發班次的更次。"
   pt: "Nenhuma escala tem uma viagem futura correspondente."
   ca: "Cap torn amb trajectes pendents coincideix."
   fr: "Aucun service n'a de voyage à venir qui correspond."
@@ -49772,7 +49772,7 @@ _version: 2
 
 "No tour left at this time: show the ended tours, or start earlier.":
   es: "No quedan turnos a esta hora: muestra los que ya han terminado o empieza antes."
-  zh-tw: "此時間已無可用班次：顯示已結束班次，或提早開始。"
+  zh-tw: "此時間已無可用更次：顯示已結束的更次，或提早開始。"
   pt: "Não há mais escalas neste horário: mostre as encerradas ou comece mais cedo."
   ca: "No queden torns a aquesta hora: mostra els acabats o comença abans."
   fr: "Plus aucun service à cette heure : affichez les services terminés ou commencez plus tôt."
@@ -49851,7 +49851,7 @@ _version: 2
 
 "Tours of this line on the chosen day":
   es: "Turnos de esta línea en el día elegido"
-  zh-tw: "此路線在所選日期的班次"
+  zh-tw: "此路線在所選日期的更次"
   pt: "Escalas desta linha no dia escolhido"
   ca: "Torns d'aquesta línia el dia triat"
   fr: "Services de cette ligne le jour choisi"
@@ -61114,12 +61114,12 @@ _version: 2
   sr: "Dodela tastera nije sačuvana: {e}"
   ru: "Раскладка клавиши не сохранена: {e}"
 "Kneeling: C (or Space) stands up again":
-  zh-tw: "車身跪降中：再次按 C（或空白鍵）即可升起"
+  zh-tw: "已蹲下：再次按 C（或空白鍵）即可起身"
   fr: "Accroupi : C (ou Espace) pour se relever"
   sr: "Spuštanje autobusa: pritisnite C (ili Space) da ga ponovo podignete"
   ru: "Приседание: C (или пробел) поднимает обратно"
 "Kneeling: the button again stands up":
-  zh-tw: "車身跪降中：再次按下該按鈕即可升起"
+  zh-tw: "已蹲下：再次按下該按鈕即可起身"
   fr: "Accroupi : le même bouton pour se relever"
   sr: "Spuštanje autobusa: ponovo pritisnite dugme da ga podignete"
   ru: "Приседание: та же кнопка поднимает обратно"
@@ -62714,423 +62714,563 @@ _version: 2
   sr: "Pravac"
 
 "Heating control temperature":
+  zh-tw: "暖氣溫度調節"
   pt: "Controle de temperatura do aquecimento"
 
 "Heating control footwell":
+  zh-tw: "腳部暖氣調節"
   pt: "Controle de aquecimento da área dos pés"
 
 "Mirror heating on/off":
+  zh-tw: "後視鏡加熱開／關"
   pt: "Aquecimento dos espelhos: ligar/desligar"
 
 "Lift down switch on/off":
+  zh-tw: "升降台下降開關開／關"
   pt: "Interruptor de descida do elevador: ligar/desligar"
 
 "Driver's door":
+  zh-tw: "駕駛室門"
   pt: "Porta do motorista"
 
 "Left driver's door":
+  zh-tw: "左側駕駛室門"
   pt: "Porta esquerda do motorista"
 
 "Right driver's door":
+  zh-tw: "右側駕駛室門"
   pt: "Porta direita do motorista"
 
 "Ignition key":
+  zh-tw: "點火鑰匙"
   pt: "Chave de ignição"
 
 "Door lock":
+  zh-tw: "門鎖"
   pt: "Trava da porta"
 
 "Parking Brake On/Off":
+  zh-tw: "手煞車開／關"
   pt: "Freio de estacionamento: ligar/desligar"
 
 "Parking Brake Set":
+  zh-tw: "拉起手煞車"
   pt: "Acionar freio de estacionamento"
 
 "Parking Brake Release":
+  zh-tw: "解除手煞車"
   pt: "Liberar freio de estacionamento"
 
 "Electricity On/Off":
+  zh-tw: "電源開／關"
   pt: "Alimentação elétrica: ligar/desligar"
 
 "Front Door, 1st Wing Open/Close":
+  zh-tw: "前門第一扇門開／關"
   pt: "Porta dianteira, primeira folha: abrir/fechar"
 
 "Front Door, 2nd Wing Open/Close":
+  zh-tw: "前門第二扇門開／關"
   pt: "Porta dianteira, segunda folha: abrir/fechar"
 
 "Stop Request Button":
+  zh-tw: "落車鐘按鈕"
   pt: "Botão de solicitação de parada"
 
 "Buggy Request Button":
+  zh-tw: "嬰兒車上落車請求按鈕"
   pt: "Botão de solicitação para carrinho de bebê"
 
 "Buggy Switch (Open Rear Door Manually)":
+  zh-tw: "嬰兒車開關（手動開啟後門）"
   pt: "Interruptor para carrinho de bebê (abrir porta traseira manualmente)"
 
 "Cabin Light Lower Deck On/Off":
+  zh-tw: "下層車廂燈開／關"
   pt: "Iluminação do andar inferior: ligar/desligar"
 
 "Cabin Light Upper Deck On/Off":
+  zh-tw: "上層車廂燈開／關"
   pt: "Iluminação do andar superior: ligar/desligar"
 
 "Cabin Light Lower Deck, First on the Right On/Off":
+  zh-tw: "下層車廂右側第一盞燈開／關"
   pt: "Primeira luz à direita do andar inferior: ligar/desligar"
 
 "Driver's Light On/Off":
+  zh-tw: "駕駛室燈開／關"
   pt: "Luz do motorista: ligar/desligar"
 
 "Driving Slip Regulation System On/Off":
+  zh-tw: "驅動防滑系統開／關"
   pt: "Controle de tração: ligar/desligar"
 
 "Dimmed Headlights On/Off":
+  zh-tw: "近光燈開／關"
   pt: "Farol baixo: ligar/desligar"
 
 "Full Beam On/Off / Flash Light":
+  zh-tw: "遠光燈開／關／閃燈"
   pt: "Farol alto: ligar/desligar / lampejar"
 
 "Engine On/Off":
+  zh-tw: "引擎開／關"
   pt: "Motor: ligar/desligar"
 
 "Engine Shut Down":
+  zh-tw: "關閉引擎"
   pt: "Desligar motor"
 
 "Engine Cooling On/Off":
+  zh-tw: "引擎冷卻開／關"
   pt: "Arrefecimento do motor: ligar/desligar"
 
 "Heater Blower On/Off":
+  zh-tw: "暖氣風機開／關"
   pt: "Ventilador do aquecedor: ligar/desligar"
 
 "Microphone Switch (Announcements)":
+  zh-tw: "麥克風開關（廣播）"
   pt: "Interruptor do microfone (anúncios)"
 
 "Parking Light On/Off":
+  zh-tw: "位置燈開／關"
   pt: "Luz de posição: ligar/desligar"
 
 "Park Heating On/Off":
+  zh-tw: "駐車暖氣開／關"
   pt: "Aquecedor auxiliar: ligar/desligar"
 
 "Rear Fog Light On/Off":
+  zh-tw: "後霧燈開／關"
   pt: "Luz de neblina traseira: ligar/desligar"
 
 "Retarder Direct Mode On/Off":
+  zh-tw: "緩速器直接模式開／關"
   pt: "Modo direto do retardador: ligar/desligar"
 
 "Retarder On/Off":
+  zh-tw: "緩速器開／關"
   pt: "Retardador: ligar/desligar"
 
 "Station Brake & Door Release On/Off":
+  zh-tw: "停站煞車與車門解鎖開／關"
   pt: "Freio de parada e liberação das portas: ligar/desligar"
 
 "Only Station Brake (20h switch) On/Off":
+  zh-tw: "僅停站煞車（20h 開關）開／關"
   pt: "Freio de parada (interruptor 20h): ligar/desligar"
 
 "Warning Lights On/Off":
+  zh-tw: "危險警告燈開／關"
   pt: "Pisca-alerta: ligar/desligar"
 
 "Set Blinker Left":
+  zh-tw: "開啟左方向燈"
   pt: "Acionar seta esquerda"
 
 "Set Blinker Right":
+  zh-tw: "開啟右方向燈"
   pt: "Acionar seta direita"
 
 "Set Blinker Off":
+  zh-tw: "關閉方向燈"
   pt: "Desligar setas"
 
 "Blinker Left via Off":
+  zh-tw: "左方向燈／關閉"
   pt: "Seta esquerda passando pela posição desligada"
 
 "Blinker Right via Off":
+  zh-tw: "右方向燈／關閉"
   pt: "Seta direita passando pela posição desligada"
 
 "Steering Left":
+  zh-tw: "向左轉向"
   pt: "Virar à esquerda"
 
 "Steering Right":
+  zh-tw: "向右轉向"
   pt: "Virar à direita"
 
 "Steering Neutral":
+  zh-tw: "方向盤回正"
   pt: "Centralizar direção"
 
 "Throttle Boost/Brake release":
+  zh-tw: "全油門／解除煞車"
   pt: "Reforço do acelerador / liberar freio"
 
 "Give Ticket":
+  zh-tw: "交出票券"
   pt: "Entregar bilhete"
 
 "Give Change":
+  zh-tw: "找零"
   pt: "Entregar troco"
 
 "Take the change":
+  zh-tw: "取走找零"
   pt: "Pegar troco"
 
 "Wiper On/Off":
+  zh-tw: "雨刷開／關"
   pt: "Limpador do para-brisa: ligar/desligar"
 
 "Wiper Fast On/Off":
+  zh-tw: "高速雨刷開／關"
   pt: "Limpador rápido: ligar/desligar"
 
 "Wiper Intermittent On/Off":
+  zh-tw: "間歇雨刷開／關"
   pt: "Limpador intermitente: ligar/desligar"
 
 "Wiper: Washer":
+  zh-tw: "雨刷清洗器"
   pt: "Limpador: lavador do para-brisa"
 
 "Cassette Recorder Play":
+  zh-tw: "播放卡式錄音帶"
   pt: "Reproduzir fita"
 
 "Cassette Recorder Stop":
+  zh-tw: "停止卡式錄音帶"
   pt: "Parar fita"
 
 "Release Curtain":
+  zh-tw: "放下遮陽簾"
   pt: "Soltar cortina"
 
 "Move Rollsign To Next Notch":
+  zh-tw: "布牌移至下一格"
   pt: "Avançar letreiro de lona uma posição"
 
 "Move Rollsign To Previous Notch":
+  zh-tw: "布牌移至上一格"
   pt: "Recuar letreiro de lona uma posição"
 
 "Wind Rollsign Down":
+  zh-tw: "向下轉動布牌"
   pt: "Rolar letreiro de lona para baixo"
 
 "Wind Rollsign Up":
+  zh-tw: "向上轉動布牌"
   pt: "Rolar letreiro de lona para cima"
 
 "Select Terminus Rollsign":
+  zh-tw: "選擇終點布牌"
   pt: "Selecionar destino do letreiro de lona"
 
 "IBIS: Back":
+  zh-tw: "IBIS：上一項"
   pt: "IBIS: voltar"
 
 "IBIS: Delete":
+  zh-tw: "IBIS：刪除"
   pt: "IBIS: apagar"
 
 "IBIS: Enter":
+  zh-tw: "IBIS：確認"
   pt: "IBIS: confirmar"
 
 "IBIS: Forward":
+  zh-tw: "IBIS：下一項"
   pt: "IBIS: avançar"
 
 "IBIS: Forward (Mute)":
+  zh-tw: "IBIS：下一項（靜音）"
   pt: "IBIS: avançar (sem anúncio)"
 
 "IBIS: Line/Course":
+  zh-tw: "IBIS：路線／車務編號"
   pt: "IBIS: linha / serviço"
 
 "IBIS: Route":
+  zh-tw: "IBIS：行駛路徑"
   pt: "IBIS: itinerário"
 
 "IBIS: Terminus":
+  zh-tw: "IBIS：終點站"
   pt: "IBIS: destino final"
 
 "Ticket Printer: Cancel":
+  zh-tw: "售票機：取消"
   pt: "Impressora de bilhetes: cancelar"
 
 "Ticket Printer: Enter":
+  zh-tw: "售票機：確認"
   pt: "Impressora de bilhetes: confirmar"
 
 "Manuel Gearbox: Reverse Gear":
+  zh-tw: "手排變速箱：倒檔"
   pt: "Câmbio manual: marcha à ré"
 
 "Manuel Gearbox: No Gear":
+  zh-tw: "手排變速箱：空檔"
   pt: "Câmbio manual: ponto morto"
 
 "Manuel Gearbox: Next Gear":
+  zh-tw: "手排變速箱：升檔"
   pt: "Câmbio manual: próxima marcha"
 
 "Manuel Gearbox: Prev. Gear":
+  zh-tw: "手排變速箱：降檔"
   pt: "Câmbio manual: marcha anterior"
 
 "Switch Steering Visible/Invisible":
+  zh-tw: "顯示／隱藏方向盤"
   pt: "Mostrar / ocultar volante"
 
 "Automatic Gearbox: 1":
+  zh-tw: "自動變速箱：1 檔"
   pt: "Câmbio automático: 1"
 
 "Automatic Gearbox: 2":
+  zh-tw: "自動變速箱：2 檔"
   pt: "Câmbio automático: 2"
 
 "Automatic Gearbox: D":
+  zh-tw: "自動變速箱：D 檔"
   pt: "Câmbio automático: D"
 
 "Automatic Gearbox: N":
+  zh-tw: "自動變速箱：N 檔"
   pt: "Câmbio automático: N"
 
 "Automatic Gearbox: R":
+  zh-tw: "自動變速箱：R 檔"
   pt: "Câmbio automático: R"
 
 "Manuel Gearbox: 1st Gear":
+  zh-tw: "手排變速箱：1 檔"
   pt: "Câmbio manual: 1ª marcha"
 
 "Manual Gearbox: 1st Gear (only while gamectrler button is pressed)":
+  zh-tw: "手排變速箱：1 檔（僅在按住遊戲控制器按鈕時）"
   pt: "Câmbio manual: 1ª marcha (enquanto o botão do controle estiver pressionado)"
 
 "Manuel Gearbox: 2nd Gear":
+  zh-tw: "手排變速箱：2 檔"
   pt: "Câmbio manual: 2ª marcha"
 
 "Manual Gearbox: 2nd Gear (only while gamectrler button is pressed)":
+  zh-tw: "手排變速箱：2 檔（僅在按住遊戲控制器按鈕時）"
   pt: "Câmbio manual: 2ª marcha (enquanto o botão do controle estiver pressionado)"
 
 "Manuel Gearbox: 3rd Gear":
+  zh-tw: "手排變速箱：3 檔"
   pt: "Câmbio manual: 3ª marcha"
 
 "Manual Gearbox: 3rd Gear (only while gamectrler button is pressed)":
+  zh-tw: "手排變速箱：3 檔（僅在按住遊戲控制器按鈕時）"
   pt: "Câmbio manual: 3ª marcha (enquanto o botão do controle estiver pressionado)"
 
 "Manuel Gearbox: 4th Gear":
+  zh-tw: "手排變速箱：4 檔"
   pt: "Câmbio manual: 4ª marcha"
 
 "Manual Gearbox: 4th Gear (only while gamectrler button is pressed)":
+  zh-tw: "手排變速箱：4 檔（僅在按住遊戲控制器按鈕時）"
   pt: "Câmbio manual: 4ª marcha (enquanto o botão do controle estiver pressionado)"
 
 "Manuel Gearbox: 5th Gear":
+  zh-tw: "手排變速箱：5 檔"
   pt: "Câmbio manual: 5ª marcha"
 
 "Manual Gearbox: 5th Gear (only while gamectrler button is pressed)":
+  zh-tw: "手排變速箱：5 檔（僅在按住遊戲控制器按鈕時）"
   pt: "Câmbio manual: 5ª marcha (enquanto o botão do controle estiver pressionado)"
 
 "Manuel Gearbox: 6th Gear":
+  zh-tw: "手排變速箱：6 檔"
   pt: "Câmbio manual: 6ª marcha"
 
 "Manual Gearbox: 6th Gear (only while gamectrler button is pressed)":
+  zh-tw: "手排變速箱：6 檔（僅在按住遊戲控制器按鈕時）"
   pt: "Câmbio manual: 6ª marcha (enquanto o botão do controle estiver pressionado)"
 
 "Manual Gearbox: Reverse Gear (only while gamectrler button is pressed)":
+  zh-tw: "手排變速箱：倒檔（僅在按住遊戲控制器按鈕時）"
   pt: "Câmbio manual: marcha à ré (enquanto o botão do controle estiver pressionado)"
 
 "IBIS: 0":
+  zh-tw: "IBIS：0"
   pt: "IBIS: 0"
 
 "IBIS: 1":
+  zh-tw: "IBIS：1"
   pt: "IBIS: 1"
 
 "IBIS: 2":
+  zh-tw: "IBIS：2"
   pt: "IBIS: 2"
 
 "IBIS: 3":
+  zh-tw: "IBIS：3"
   pt: "IBIS: 3"
 
 "IBIS: 4":
+  zh-tw: "IBIS：4"
   pt: "IBIS: 4"
 
 "IBIS: 5":
+  zh-tw: "IBIS：5"
   pt: "IBIS: 5"
 
 "IBIS: 6":
+  zh-tw: "IBIS：6"
   pt: "IBIS: 6"
 
 "IBIS: 7":
+  zh-tw: "IBIS：7"
   pt: "IBIS: 7"
 
 "IBIS: 8":
+  zh-tw: "IBIS：8"
   pt: "IBIS: 8"
 
 "IBIS: 9":
+  zh-tw: "IBIS：9"
   pt: "IBIS: 9"
 
 "Ticket Printer: Select Ticket 1":
+  zh-tw: "售票機：選擇第 1 種車票"
   pt: "Impressora de bilhetes: selecionar bilhete 1"
 
 "Ticket Printer: Select Ticket 2":
+  zh-tw: "售票機：選擇第 2 種車票"
   pt: "Impressora de bilhetes: selecionar bilhete 2"
 
 "Ticket Printer: Select Ticket 3":
+  zh-tw: "售票機：選擇第 3 種車票"
   pt: "Impressora de bilhetes: selecionar bilhete 3"
 
 "Ticket Printer: Select Ticket 4":
+  zh-tw: "售票機：選擇第 4 種車票"
   pt: "Impressora de bilhetes: selecionar bilhete 4"
 
 "Ticket Printer: Select Ticket 5":
+  zh-tw: "售票機：選擇第 5 種車票"
   pt: "Impressora de bilhetes: selecionar bilhete 5"
 
 "Select Line Rollsign 1":
+  zh-tw: "選擇第 1 個路線布牌"
   pt: "Selecionar linha do letreiro de lona 1"
 
 "Select Line Rollsign 2":
+  zh-tw: "選擇第 2 個路線布牌"
   pt: "Selecionar linha do letreiro de lona 2"
 
 "Select Line Rollsign 3":
+  zh-tw: "選擇第 3 個路線布牌"
   pt: "Selecionar linha do letreiro de lona 3"
 
 "Cashdesk: give 0.05":
+  zh-tw: "錢箱：找零 0.05"
   pt: "Mesa de cobrança: entregar 0,05"
 
 "Cashdesk: give 0.10":
+  zh-tw: "錢箱：找零 0.10"
   pt: "Mesa de cobrança: entregar 0,10"
 
 "Cashdesk: give 0.15":
+  zh-tw: "錢箱：找零 0.15"
   pt: "Mesa de cobrança: entregar 0,15"
 
 "Cashdesk: give 0.30":
+  zh-tw: "錢箱：找零 0.30"
   pt: "Mesa de cobrança: entregar 0,30"
 
 "Cashdesk: give 0.50":
+  zh-tw: "錢箱：找零 0.50"
   pt: "Mesa de cobrança: entregar 0,50"
 
 "Cashdesk: give 1.00":
+  zh-tw: "錢箱：找零 1.00"
   pt: "Mesa de cobrança: entregar 1,00"
 
 "Cashdesk: give 1.50":
+  zh-tw: "錢箱：找零 1.50"
   pt: "Mesa de cobrança: entregar 1,50"
 
 "Cashdesk: give 2.00":
+  zh-tw: "錢箱：找零 2.00"
   pt: "Mesa de cobrança: entregar 2,00"
 
 "Cashdesk: give 4.00":
+  zh-tw: "錢箱：找零 4.00"
   pt: "Mesa de cobrança: entregar 4,00"
 
 "Cashdesk: give 5.00":
+  zh-tw: "錢箱：找零 5.00"
   pt: "Mesa de cobrança: entregar 5,00"
 
 "Cashdesk: give 8.00":
+  zh-tw: "錢箱：找零 8.00"
   pt: "Mesa de cobrança: entregar 8,00"
 
 "Cashdesk: give 15.00":
+  zh-tw: "錢箱：找零 15.00"
   pt: "Mesa de cobrança: entregar 15,00"
 
 "SD83: Rollsign Line Start":
+  zh-tw: "SD83：啟動路線布牌"
   pt: "SD83: iniciar letreiro de linha"
 
 "SD83: Rollsign Line Select 100s +":
+  zh-tw: "SD83：路線布牌百位加一"
   pt: "SD83: aumentar centenas do letreiro de linha"
 
 "SD83: Rollsign Line Select 100s -":
+  zh-tw: "SD83：路線布牌百位減一"
   pt: "SD83: diminuir centenas do letreiro de linha"
 
 "SD83: Rollsign Line Select 10s +":
+  zh-tw: "SD83：路線布牌十位加一"
   pt: "SD83: aumentar dezenas do letreiro de linha"
 
 "SD83: Rollsign Line Select 10s -":
+  zh-tw: "SD83：路線布牌十位減一"
   pt: "SD83: diminuir dezenas do letreiro de linha"
 
 "SD83: Rollsign Line Select 1s +":
+  zh-tw: "SD83：路線布牌個位加一"
   pt: "SD83: aumentar unidades do letreiro de linha"
 
 "SD83: Rollsign Line Select 1s -":
+  zh-tw: "SD83：路線布牌個位減一"
   pt: "SD83: diminuir unidades do letreiro de linha"
 
 "SD83: Rollsign Terminus Start":
+  zh-tw: "SD83：啟動終點布牌"
   pt: "SD83: iniciar letreiro de destino final"
 
 "SD83: Rollsign Terminus Select 100s +":
+  zh-tw: "SD83：終點布牌百位加一"
   pt: "SD83: aumentar centenas do letreiro de destino final"
 
 "SD83: Rollsign Terminus Select 100s -":
+  zh-tw: "SD83：終點布牌百位減一"
   pt: "SD83: diminuir centenas do letreiro de destino final"
 
 "SD83: Rollsign Terminus Select 10s +":
+  zh-tw: "SD83：終點布牌十位加一"
   pt: "SD83: aumentar dezenas do letreiro de destino final"
 
 "SD83: Rollsign Terminus Select 10s -":
+  zh-tw: "SD83：終點布牌十位減一"
   pt: "SD83: diminuir dezenas do letreiro de destino final"
 
 "SD83: Rollsign Terminus Select 1s +":
+  zh-tw: "SD83：終點布牌個位加一"
   pt: "SD83: aumentar unidades do letreiro de destino final"
 
 "SD83: Rollsign Terminus Select 1s -":
+  zh-tw: "SD83：終點布牌個位減一"
   pt: "SD83: diminuir unidades do letreiro de destino final"
 
 " (outside)":
+  zh-tw: "（車外）"
   pt: " (externo)"
 "Mirror panels on the screen":
   de: "Spiegelpanels auf dem Bildschirm"
@@ -64333,3 +64473,50 @@ _version: 2
   ca: "Esborra tots els punts de pas"
   sv: "Rensa alla ruttpunkter"
   sr: "Obriši sve putne tačke"
+
+"Standing":
+  zh-tw: "已起身"
+"Washing...":
+  zh-tw: "正在洗車……"
+"refuelled: {now:.0} l in the tank":
+  zh-tw: "加油完成：油箱內有 {now:.0} 公升燃油"
+"washed: dirt {:.0}%":
+  zh-tw: "洗車完成：污垢程度 {:.0}%"
+"this vehicle has no fuel pump handling (veh_tank)":
+  zh-tw: "此車輛未實作加油功能（veh_tank）"
+"this vehicle has no bus wash handling (veh_wash)":
+  zh-tw: "此車輛未實作洗車功能（veh_wash）"
+"this vehicle has no repair handling (malfunction_reset)":
+  zh-tw: "此車輛未實作維修功能（malfunction_reset）"
+"repaired":
+  zh-tw: "維修完成"
+"repaired: {mins:.0} min of work":
+  zh-tw: "維修完成：作業耗時 {mins:.0} 分鐘"
+"repaired: {mins:.0} min of work + {travel:.0} min for the team to get here":
+  zh-tw: "維修完成：作業耗時 {mins:.0} 分鐘，維修人員到場耗時 {travel:.0} 分鐘"
+"Gear {}":
+  zh-tw: "{} 檔"
+"Screenshot: {}":
+  zh-tw: "截圖已儲存：{}"
+"Date: {}":
+  zh-tw: "日期：{}"
+"Clock: {}":
+  zh-tw: "時間：{}"
+"Coupled: {}":
+  zh-tw: "已連結：{}"
+"Now driving: {}":
+  zh-tw: "目前駕駛：{}"
+"Driver: {name}":
+  zh-tw: "駕駛員：{name}"
+"Route {line}":
+  zh-tw: "路線：{line}"
+"{n} placed vehicle(s) removed":
+  zh-tw: "已移除 {n} 輛已放置的車輛"
+"choose an action":
+  zh-tw: "選擇操作"
+"{} removed: you are on foot (Esc menu: Place a vehicle, or G at a bus's driver's door)":
+  zh-tw: "已移除 {}：目前為步行模式（Esc 選單可放置車輛，或在巴士駕駛室門旁按 G）"
+"Traffic: {}":
+  zh-tw: "車流量：{}"
+"{removed} AI vehicles taken off the road":
+  zh-tw: "已移除道路上的 {removed} 輛 AI 車輛"

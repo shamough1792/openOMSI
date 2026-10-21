@@ -185,7 +185,7 @@ fn host_action(app: &mut App, action: &str) {
             if let Some(t) = app.session.traffic.as_mut() {
                 t.target = crate::game_lists::next_step(&crate::game_lists::TRAFFIC, t.target);
                 app.args.traffic = t.target;
-                app.service_msg = Some((format!("Traffic: {}", t.target), 3.0));
+                app.service_msg = Some((omsi_ui::tr("Traffic: {}").replacen("{}", &t.target.to_string(), 1), 3.0));
             }
         }
         _ => {}
@@ -202,7 +202,7 @@ pub(crate) fn clear_ai_traffic(app: &mut App) {
     if let (Some(t), Some(w), Some(r), Some(scene)) = (app.session.traffic.as_mut(), app.world.as_ref(), app.renderer.as_ref(), app.scene.as_mut()) {
         let removed = t.clear_random();
         crate::view_sync::apply_traffic(t, &mut app.gfx.sim_view.traffic, w, r, scene);
-        app.service_msg = Some((format!("{removed} AI vehicles taken off the road"), 3.0));
+        app.service_msg = Some((omsi_ui::tr("{removed} AI vehicles taken off the road").replace("{removed}", &removed.to_string()), 3.0));
     }
 }
 

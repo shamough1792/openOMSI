@@ -994,6 +994,24 @@ mod locale_tests {
     }
 
     #[test]
+    fn character_and_service_notices_use_traditional_chinese() {
+        super::with_test_language("zh-tw", || {
+            for (message, expected) in [
+                ("Standing", "已起身"),
+                ("Kneeling: C (or Space) stands up again", "已蹲下：再次按 C（或空白鍵）即可起身"),
+                ("Kneeling: the button again stands up", "已蹲下：再次按下該按鈕即可起身"),
+                ("refuelled: 250 l in the tank", "加油完成：油箱內有 250 公升燃油"),
+                ("washed: dirt 0%", "洗車完成：污垢程度 0%"),
+                ("Washing...", "正在洗車……"),
+                ("this vehicle has no fuel pump handling (veh_tank)", "此車輛未實作加油功能（veh_tank）"),
+                ("this vehicle has no bus wash handling (veh_wash)", "此車輛未實作洗車功能（veh_wash）"),
+            ] {
+                assert_eq!(omsi_ui::tr(message), expected, "{message}");
+            }
+        });
+    }
+
+    #[test]
     fn a_translated_template_is_left_as_it_is_when_translated_again() {
         let t = templates(super::locale_keys(super::_LOCALES));
         for lang in super::_rust_i18n_available_locales() {
